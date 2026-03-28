@@ -7,8 +7,8 @@
 
 \geometry{margin=1in}
 
-\title{The mathematical and functional flow of modern Transformer-based architectures}
-\author{A formula cheat-sheet: standard SDPA, sub-quadratic attention and inference}
+\title{The functional flow of modern Transformer-based architectures: a mathematical cheat-sheet}
+\author{Akshay Mishra}
 \date{March 2026}
 
 \begin{document}
@@ -52,7 +52,7 @@
 	\begin{equation}
 		E = O \cdot W_e \in \mathbb{R}^{c \times d}
 	\end{equation}
-	\textbf{Definitions and Mechanics:}
+	\textbf{Definitions and mechanics:}
 	\begin{itemize}
 		\item $O \in \mathbb{R}^{c \times N}$: The one-hot encoded input matrix.
 		\item $c$: Context Size (sequence length). The number of tokens currently being processed.
@@ -72,11 +72,11 @@
 		P_{(pos, 2i)} &= \sin\left(\frac{pos}{10000^{2i/d}}\right) \\
 		P_{(pos, 2i+1)} &= \cos\left(\frac{pos}{10000^{2i/d}}\right)
 	\end{align}
-	\textbf{Definitions and Mechanics:}
+	\textbf{Definitions and mechanics:}
 	\begin{itemize}
 		\item $pos$: Token position index ($0$ to $c-1$).
 		\item $i$: Dimension index along the vector ($0$ to $d/2 - 1$).
-		\item \textbf{Why Sine/Cosine?} The term $10000^{2i/d}$ creates a geometric progression of wavelengths.
+		\item \textbf{Why sine/cosine?} The term $10000^{2i/d}$ creates a geometric progression of wavelengths.
 		Early dimensions in the vector fluctuate wildly (like the seconds hand on a clock), while later dimensions fluctuate very slowly (like the hour hand).
 		This allows the model to easily calculate relative distances between words.
 		\item $Z_0 \in \mathbb{R}^{c \times d}$: The initial sequence matrix that will be passed into the very first architectural block.
@@ -100,7 +100,7 @@
 	\begin{equation}
 		Q_i = Z W_i^Q, \quad K_i = Z W_i^K, \quad V_i = Z W_i^V \in \mathbb{R}^{c \times d_k}
 	\end{equation}
-	\textbf{Definitions and The Retrieval Analogy:}
+	\textbf{Definitions and the retrieval analogy:}
 	\begin{itemize}
 		\item $h$: Number of attention heads.
 		\item $d_k = d/h$: Dimension of each head.
@@ -114,7 +114,7 @@
 	\begin{equation}
 		\text{head}_i = \text{Softmax}\left(\frac{Q_i K_i^T}{\sqrt{d_k}}\right) V_i \in \mathbb{R}^{c \times d_k}
 	\end{equation}
-	\textbf{Definitions and Mechanics:}
+	\textbf{Definitions and mechanics:}
 	\begin{itemize}
 		\item $Q_i K_i^T \in \mathbb{R}^{c \times c}$: Raw similarity scores.
 		We take the dot product of every Query against every Key. A high dot product means high relevance.
@@ -152,10 +152,10 @@
 		\text{head}_i = \text{Softmax}\left(\frac{Q_i K_i^T}{\sqrt{d_k}} + M\right) V_i \in \mathbb{R}^{c \times d_k}
 	\end{equation}
 	
-	\textbf{Definitions and Mechanics:}
+	\textbf{Definitions and mechanics:}
 	\begin{itemize}
 		\item $M \in \mathbb{R}^{c \times c}$: The mask matrix. It mathematically dictates which tokens are allowed to attend to which other tokens in the context window.
-		\item \textbf{Causal Masking (Autoregressive):} During language generation, a token at position $t$ must only look at past tokens and itself, not future tokens. Otherwise, the model would simply "cheat" by looking at the subsequent words during training. The causal mask is a lower-triangular matrix:
+		\item \textbf{Causal masking (autoregressive):} During language generation, a token at position $t$ must only look at past tokens and itself, not future tokens. Otherwise, the model would simply "cheat" by looking at the subsequent words during training. The causal mask is a lower-triangular matrix:
 		\begin{equation}
 			M_{i,j} = 
 			\begin{cases} 
@@ -164,8 +164,8 @@
 			\end{cases}
 		\end{equation}
 		Here, $i$ is the Query token's position (row) and $j$ is the Key token's position (column).
-		\item \textbf{Padding Masking:} To process multiple sequences of varying lengths in a single training batch, shorter sequences are padded with empty $\langle \text{PAD} \rangle$ tokens to match the maximum length $c$. We must force the model to ignore these dummy tokens. If position $j$ corresponds to a padding token, then $M_{i,j} = -\infty$ for all rows $i$.
-		\item \textbf{Why Negative Infinity ($-\infty$)?} The Softmax function exponentiates its inputs ($e^x$). By adding $-\infty$ to the raw similarity score of a forbidden connection, we evaluate $e^{-\infty} \to 0$. This ensures that the forbidden token receives exactly $0$ probability weight, meaning none of its Value ($V$) vector is transferred to the output state.
+		\item \textbf{Padding masking:} To process multiple sequences of varying lengths in a single training batch, shorter sequences are padded with empty $\langle \text{PAD} \rangle$ tokens to match the maximum length $c$. We must force the model to ignore these dummy tokens. If position $j$ corresponds to a padding token, then $M_{i,j} = -\infty$ for all rows $i$.
+		\item \textbf{Why negative infinity ($-\infty$)?} The Softmax function exponentiates its inputs ($e^x$). By adding $-\infty$ to the raw similarity score of a forbidden connection, we evaluate $e^{-\infty} \to 0$. This ensures that the forbidden token receives exactly $0$ probability weight, meaning none of its Value ($V$) vector is transferred to the output state.
 	\end{itemize}
 	
 	---
@@ -187,14 +187,14 @@
 		h_t = h_{t-1} \bar{A} + x_t \bar{B}_t, \quad y_t = h_t C_t
 	\end{equation}
 	
-	\textbf{The Selective Mechanism:}
+	\textbf{The selective mechanism:}
 	Traditional SSMs use static matrices.
 	Mamba introduces a \textit{selective mechanism} by making the matrices data-dependent (changing based on the current token $x_t$).
 	\begin{equation}
 		\Delta_t = \text{Softplus}(\text{Linear}(x_t)), \quad \bar{B}_t = \text{Linear}(x_t), \quad C_t = \text{Linear}(x_t)
 	\end{equation}
 	
-	\textbf{Definitions and Mechanics:}
+	\textbf{Definitions and mechanics:}
 	\begin{itemize}
 		\item $h_t \in \mathbb{R}^{1 \times n}$: The hidden state row vector.
 		$n$ is the State Expansion Dimension, which determines the capacity of the memory.
@@ -223,7 +223,7 @@
 		g_t = \sigma(\text{Linear}(x_t)), \quad S_t = g_t \odot S_{t-1} + k_t v_t^T, \quad o_t = q_t S_t
 	\end{equation}
 	
-	\textbf{Definitions and Mechanics:}
+	\textbf{Definitions and mechanics:}
 	\begin{itemize}
 		\item $S_t \in \mathbb{R}^{d_k \times d_v}$: The fixed-size memory matrix.
 		This stores the summarized context of all tokens up to step $t$.
@@ -281,7 +281,7 @@
 	\begin{equation}
 		\text{Dropout}(x) = x \odot \mathbf{m}
 	\end{equation}
-	\textbf{Definitions and Mechanics:}~\cite{srivastava2014dropout} 
+	\textbf{Definitions and mechanics:}~\cite{srivastava2014dropout} 
 	$\mathbf{m} \sim \text{Bernoulli}(1-p)$ is a random mask vector containing $1$s and $0$s.
 	$p$ is the probability of a neuron being set to $0$ (dropped).
 	By randomly deactivating features during training, the network is forced to learn redundant, robust representations rather than relying too heavily on any single neuron (preventing "co-adaptation" or overfitting).
@@ -397,7 +397,7 @@
 	\begin{equation}
 		L = Z_k W_u \in \mathbb{R}^{c \times N}, \quad P = \text{Softmax}(L) \in \mathbb{R}^{c \times N}
 	\end{equation}
-	\textbf{Definitions and Mechanics:}
+	\textbf{Definitions and mechanics:}
 	\begin{itemize}
 		\item $Z_k \in \mathbb{R}^{c \times d}$: The output of the final $k$-th block.
 		This matrix holds the highly contextualized vector representations of all $c$ tokens in the sequence.
@@ -417,7 +417,7 @@
 		\item $Y \in \mathbb{R}^{N}$: The true target token (one-hot).
 		Because the ground truth is one-hot encoded, $Y_j = 1$ for the correct word's index, and $Y_j = 0$ for all other indices in the vocabulary.
 		\item $\log(P_j)$: The natural logarithm of the predicted probability for the token at index $j$.
-		\item \textbf{Mathematical Collapse:} Because $Y_j$ is zero everywhere except at the correct token's index, the summation mathematically collapses to just a single term: $\mathcal{L} = -\log(P_{\text{correct}})$.
+		\item \textbf{Mathematical collapse:} Because $Y_j$ is zero everywhere except at the correct token's index, the summation mathematically collapses to just a single term: $\mathcal{L} = -\log(P_{\text{correct}})$.
 		\item \textbf{Objective:} By minimizing this negative log-likelihood loss, the optimizer is forced to push the predicted probability of the correct token ($P_{\text{correct}}$) as close to $1.0$ as possible.
 	\end{itemize}
 	
@@ -467,7 +467,7 @@
 	\begin{equation}
 		\theta_{t+1} = \theta_t - \eta \cdot \frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \epsilon}
 	\end{equation}
-	\textbf{Definitions and Physical Intuition:}
+	\textbf{Definitions and physical intuition:}
 	\begin{itemize}
 		\item $\eta$: The Learning Rate (the step size taken in the direction of the gradient).
 		\item $m_t$: First moment (momentum). Tracks the general direction the gradient is pointing.
@@ -486,7 +486,7 @@
 	\begin{equation}
 		W_{t+1} = W_t - \eta \cdot \text{NewtonSchulz}(\nabla_W \mathcal{L})
 	\end{equation}
-	\textbf{Definitions and Mechanics:} 
+	\textbf{Definitions and mechanics:} 
 	$\text{NewtonSchulz}(M)$ mathematically transforms an input matrix $M$ into an orthogonal matrix $Q$ (where $Q^T Q = I$, the identity matrix).
 	It is approximated iteratively via:
 	\begin{equation}
@@ -504,12 +504,12 @@
 	
 	For a given generation step $t$, the workflow mathematically mirrors the training process but operates on a sequence length of exactly $1$ ($x_t \in \mathbb{R}^{1 \times d}$). The process from input to decoded token is as follows:
 	
-	\textbf{1. Input Embedding:} The discrete token generated from the previous step, $tok_t$, is embedded and positionally encoded to form the input vector:
+	\textbf{1. Input embedding:} The discrete token generated from the previous step, $tok_t$, is embedded and positionally encoded to form the input vector:
 	\begin{equation}
 		x_t = \text{OneHot}(tok_t) \cdot W_e + P_{(t)} \in \mathbb{R}^{1 \times d}
 	\end{equation}
 	
-	\textbf{2. Attention Calculation \& KV-Caching:} To process $x_t$ through the attention block without recalculating the entire sequence history, models utilize a \textbf{KV-Cache}~\cite{shazeer2019fast}. The new token's Keys and Values ($k_t = x_t W_i^K, v_t = x_t W_i^V$) are appended to the cached matrices of all preceding tokens:
+	\textbf{2. Attention calculation \& KV-caching:} To process $x_t$ through the attention block without recalculating the entire sequence history, models utilize a \textbf{KV-cache}~\cite{shazeer2019fast}. The new token's Keys and Values ($k_t = x_t W_i^K, v_t = x_t W_i^V$) are appended to the cached matrices of all preceding tokens:
 	\begin{equation}
 		K_{1:t} = [K_{1:t-1} \Vert k_t], \quad V_{1:t} = [V_{1:t-1} \Vert v_t]
 	\end{equation}
@@ -519,12 +519,12 @@
 	\end{equation}
 	The concatenated heads are projected and added to the residual stream to form the intermediate state $x'_t \in \mathbb{R}^{1 \times d}$.
 	
-	\textbf{3. Feed-Forward Network (FFN):} The intermediate state $x'_t$ is processed identically to the training phase (though Dropout is typically disabled during inference):
+	\textbf{3. Feed-forward network (FFN):} The intermediate state $x'_t$ is processed identically to the training phase (though Dropout is typically disabled during inference):
 	\begin{equation}
 		x_{out,t} = \text{LayerNorm}(x'_t + \text{FFN}(x'_t)) \in \mathbb{R}^{1 \times d}
 	\end{equation}
 	
-	\textbf{4. Final Decoding:} The final block's output is projected back into the vocabulary space to produce logits, which are converted to probabilities:
+	\textbf{4. Final decoding:} The final block's output is projected back into the vocabulary space to produce logits, which are converted to probabilities:
 	\begin{equation}
 		L_t = x_{out,t} W_u \in \mathbb{R}^{1 \times N}, \quad P_t = \text{Softmax}(L_t) \in \mathbb{R}^{1 \times N}
 	\end{equation}
@@ -533,7 +533,7 @@
 	\subsection{The KV-cache memory bottleneck}
 	\textbf{Concept:} As outlined in the attention calculation above, while KV-caching saves immense computation (FLOPs) by avoiding redundant calculations, it demands massive and ever-growing memory.
 	
-	\textbf{The Bottleneck:} 
+	\textbf{The bottleneck:} 
 	\begin{itemize}
 		\item $q_t \in \mathbb{R}^{1 \times d_k}$: The Query vector for just the single newly generated token.
 		\item $K_{1:t}, V_{1:t} \in \mathbb{R}^{t \times d_k}$: The cached Keys and Values up to the current step.
@@ -546,7 +546,7 @@
 	\textbf{Mechanics:}
 	\begin{itemize}
 		\item \textbf{SSMs (e.g., Mamba):} During generation, the model only needs to store the previous hidden state vector $h_{t-1} \in \mathbb{R}^n$. When generating step $t$, it computes $h_t = \bar{A} h_{t-1} + \bar{B}_t x_t$. The historical context is permanently compressed into this $n$-dimensional vector, requiring no growing memory cache.
-		\item \textbf{Gated Linear Attention:} Similarly, the model only caches the fixed-size $d_k \times d_v$ running memory matrix $S_{t-1}$. The new token simply updates this matrix: $S_t = g_t \odot S_{t-1} + k_t v_t^T$.
+		\item \textbf{Gated linear attention:} Similarly, the model only caches the fixed-size $d_k \times d_v$ running memory matrix $S_{t-1}$. The new token simply updates this matrix: $S_t = g_t \odot S_{t-1} + k_t v_t^T$.
 		\item \textbf{Result:} This constant memory footprint allows sub-quadratic models to generate theoretically infinite sequences on a single GPU without crashing due to Out-Of-Memory (OOM) errors, making them highly attractive for long-context applications.
 	\end{itemize}
 	
