@@ -327,6 +327,7 @@
 		\item $\text{ReLU}(x)$: Rectified Linear Unit~\cite{nair2010relu}, an activation function defined as $\max(0, x)$.
 		It converts all negative numbers to zero, injecting the necessary non-linearity into the network.
 		Without non-linearities, stacking multiple linear layers would collapse mathematically into just a single linear layer.
+		\item \textbf{Modern variants:} While the original Transformer used ReLU, most state-of-the-art models substitute it with GELU~\cite{hendrycks2016gelu} or SwiGLU~\cite{shazeer2020glu} for smoother gradients and improved empirical performance.
 	\end{itemize}
 	
 	Applying the stability functions to the FFN completes one full architectural block, yielding $Z_{out}$:
@@ -528,7 +529,7 @@
 	\begin{equation}
 		L_t = x_{out,t} W_u \in \mathbb{R}^{1 \times N}, \quad P_t = \text{Softmax}(L_t) \in \mathbb{R}^{1 \times N}
 	\end{equation}
-	A decoding strategy (e.g., greedy $\text{argmax}$ or nucleus sampling) selects the highest probability next token, $tok_{t+1}$, from $P_t$, and the cycle repeats.
+	A decoding strategy (e.g., greedy $\text{argmax}$ or nucleus sampling~\cite{holtzman2019curious}) selects the highest probability next token, $tok_{t+1}$, from $P_t$, and the cycle repeats.
 	
 	\subsection{The KV-cache memory bottleneck}
 	\textbf{Concept:} As outlined in the attention calculation above, while KV-caching saves immense computation (FLOPs) by avoiding redundant calculations, it demands massive and ever-growing memory.
@@ -670,6 +671,21 @@
 		Fedus, W., Zoph, B. and Shazeer, N. (2022).
 		Switch transformers: Scaling to trillion parameter models with simple and efficient sparsity.
 		\textit{The Journal of Machine Learning Research}, 23(1), pp.5232-5270.
+		
+		\bibitem{holtzman2019curious}
+		Holtzman, A., Buys, J., Du, L., Forbes, M. and Choi, Y. (2019).
+		The curious case of neural text degeneration.
+		\textit{arXiv preprint arXiv:1904.09751}.
+		
+		\bibitem{hendrycks2016gelu}
+		Hendrycks, D. and Gimpel, K. (2016).
+		Gaussian error linear units (GELUs).
+		\textit{arXiv preprint arXiv:1606.08415}.
+		
+		\bibitem{shazeer2020glu}
+		Shazeer, N. (2020).
+		GLU variants improve transformer.
+		\textit{arXiv preprint arXiv:2002.05202}.
 		
 	\end{thebibliography}
 	
