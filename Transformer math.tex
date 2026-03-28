@@ -41,27 +41,27 @@
 	\end{equation}
 	\textbf{Definitions:} 
 	\begin{itemize}
-		\item $N$: Vocabulary Size (the total number of unique words/tokens the model knows)[cite: 10].
-		\item $d$: Embedding Dimension (the size of the continuous vector representing each token)[cite: 11].
+		\item $N$: Vocabulary Size (the total number of unique words/tokens the model knows).
+		\item $d$: Embedding Dimension (the size of the continuous vector representing each token).
 		Larger dimensions allow the model to capture more nuanced nuances (e.g., gender, tense, sentiment).
 	\end{itemize}
 	
 	\subsection{Input Transformation}
-	An input sequence of $c$ tokens is represented as a matrix of one-hot vectors, $O$[cite: 12].
-	A one-hot vector contains a $1$ at the index of the specific word, and $0$s everywhere else[cite: 13].
+	An input sequence of $c$ tokens is represented as a matrix of one-hot vectors, $O$.
+	A one-hot vector contains a $1$ at the index of the specific word, and $0$s everywhere else.
 	\begin{equation}
 		E = O \cdot W_e \in \mathbb{R}^{c \times d}
 	\end{equation}
 	\textbf{Definitions and Mechanics:}
 	\begin{itemize}
-		\item $O \in \mathbb{R}^{c \times N}$: The one-hot encoded input matrix[cite: 14].
-		\item $c$: Context Size (sequence length). The number of tokens currently being processed[cite: 15].
-		\item $E \in \mathbb{R}^{c \times d}$: The dense embedding matrix[cite: 16].
+		\item $O \in \mathbb{R}^{c \times N}$: The one-hot encoded input matrix.
+		\item $c$: Context Size (sequence length). The number of tokens currently being processed.
+		\item $E \in \mathbb{R}^{c \times d}$: The dense embedding matrix.
 		Mathematically, multiplying the one-hot matrix $O$ by $W_e$ simply "plucks out" the correct rows from $W_e$, assembling them into a sequence of continuous vectors.
 	\end{itemize}
 	
 	\subsection{Positional Encoding (For Attention Models)}
-	\textbf{Concept:} Because standard Transformers process all $c$ tokens in parallel, we must inject sequence information so the model knows the order of words[cite: 16].
+	\textbf{Concept:} Because standard Transformers process all $c$ tokens in parallel, we must inject sequence information so the model knows the order of words.
 	Without this, "The dog bit the man" and "The man bit the dog" would look mathematically identical.
 	We add a Positional Encoding matrix $P$ to the embeddings:
 	\begin{equation}
@@ -74,37 +74,37 @@
 	\end{align}
 	\textbf{Definitions and Mechanics:}
 	\begin{itemize}
-		\item $pos$: Token position index ($0$ to $c-1$)[cite: 17].
-		\item $i$: Dimension index along the vector ($0$ to $d/2$)[cite: 18].
+		\item $pos$: Token position index ($0$ to $c-1$).
+		\item $i$: Dimension index along the vector ($0$ to $d/2$).
 		\item \textbf{Why Sine/Cosine?} The term $10000^{2i/d}$ creates a geometric progression of wavelengths.
 		Early dimensions in the vector fluctuate wildly (like the seconds hand on a clock), while later dimensions fluctuate very slowly (like the hour hand).
 		This allows the model to easily calculate relative distances between words.
-		\item $Z_0 \in \mathbb{R}^{c \times d}$: The initial sequence matrix that will be passed into the very first architectural block[cite: 19].
+		\item $Z_0 \in \mathbb{R}^{c \times d}$: The initial sequence matrix that will be passed into the very first architectural block.
 	\end{itemize}
 	
 	---
 	
 	\section{Standard Multi-Head Attention (MHA)}
-	This block constitutes the core routing mechanism of the Transformer, allowing tokens to share information across the context window $c$[cite: 20].
+	This block constitutes the core routing mechanism of the Transformer, allowing tokens to share information across the context window $c$.
 	
 	\subsection{Defining the Input Sequence ($Z$)}
-	Let $Z \in \mathbb{R}^{c \times d}$ represent the continuous vector sequence entering the current block[cite: 21].
+	Let $Z \in \mathbb{R}^{c \times d}$ represent the continuous vector sequence entering the current block.
 	\begin{itemize}
-		\item For the very first block, $Z$ is exactly the embedded and positionally encoded input: $Z = Z_0$[cite: 22].
-		\item For any subsequent block $l$ (where $l$ goes up to $k$), $Z$ is the final output of the previous block: $Z = Z_{l-1}$[cite: 23].
+		\item For the very first block, $Z$ is exactly the embedded and positionally encoded input: $Z = Z_0$.
+		\item For any subsequent block $l$ (where $l$ goes up to $k$), $Z$ is the final output of the previous block: $Z = Z_{l-1}$.
 	\end{itemize}
 	
 	\subsection{Linear Projections: Queries, Keys, and Values}
-	We split the embedding dimension $d$ into $h$ "heads" to learn different relationships simultaneously[cite: 24].
+	We split the embedding dimension $d$ into $h$ "heads" to learn different relationships simultaneously.
 	For example, one head might look for grammatical subjects, while another looks for emotional tone.
 	\begin{equation}
 		Q_i = Z W_i^Q, \quad K_i = Z W_i^K, \quad V_i = Z W_i^V \in \mathbb{R}^{c \times d_k}
 	\end{equation}
 	\textbf{Definitions and The Retrieval Analogy:}
 	\begin{itemize}
-		\item $h$: Number of attention heads[cite: 25].
+		\item $h$: Number of attention heads.
 		\item $d_k = d/h$: Dimension of each head.
-		\item $W_i^Q, W_i^K, W_i^V \in \mathbb{R}^{d \times d_k}$: Trainable weight matrices mapping the input $Z$ to Queries, Keys, and Values[cite: 26].
+		\item $W_i^Q, W_i^K, W_i^V \in \mathbb{R}^{d \times d_k}$: Trainable weight matrices mapping the input $Z$ to Queries, Keys, and Values.
 		\item \textbf{Query ($Q$):} What a token is looking for (e.g., "I am an adjective looking for my noun").
 		\item \textbf{Key ($K$):} What a token is (e.g., "I am a noun describing an animal").
 		\item \textbf{Value ($V$):} The token's actual underlying meaning/content that will be transferred if a Query and Key match.
@@ -118,8 +118,8 @@
 	\begin{itemize}
 		\item $Q_i K_i^T \in \mathbb{R}^{c \times c}$: Raw similarity scores.
 		We take the dot product of every Query against every Key. A high dot product means high relevance.
-		This requires $c \times c$ calculations, creating an $O(c^2)$ computational bottleneck[cite: 27].
-		\item $\sqrt{d_k}$: Scaling factor[cite: 28].
+		This requires $c \times c$ calculations, creating an $O(c^2)$ computational bottleneck.
+		\item $\sqrt{d_k}$: Scaling factor.
 		If $d_k$ is large, dot products can yield massive numbers.
 		This pushes the Softmax function into regions where gradients approach zero (vanishing gradients).
 		Dividing by $\sqrt{d_k}$ preserves variance and keeps learning stable.
@@ -137,24 +137,50 @@
 	\end{equation}
 	\textbf{Definitions:}
 	\begin{itemize}
-		\item $\Vert$: The concatenation operator (joining matrices side-by-side)[cite: 29].
+		\item $\Vert$: The concatenation operator (joining matrices side-by-side).
 		We paste all the individual heads back together.
-		\item $W^O \in \mathbb{R}^{d \times d}$: The trainable output projection matrix that mixes the heads together[cite: 30], synthesizing the different perspectives learned by the parallel heads.
+		\item $W^O \in \mathbb{R}^{d \times d}$: The trainable output projection matrix that mixes the heads together, synthesizing the different perspectives learned by the parallel heads.
+	\end{itemize}
+	
+	---
+	
+	\section{Attention Masking (Causal and Padding)}
+	\textbf{Concept:} In practice, the raw similarity scores computed in the Standard Multi-Head Attention block must be filtered before the Softmax function is applied. This prevents tokens from interacting with inappropriate context, such as future words during autoregressive generation (causal masking) or meaningless filler words used to standardize sequence lengths in batches (padding masking).
+	
+	The standard attention equation from Section 3.3 is modified to include an additive mask matrix $M$:
+	\begin{equation}
+		\text{head}_i = \text{Softmax}\left(\frac{Q_i K_i^T}{\sqrt{d_k}} + M\right) V_i \in \mathbb{R}^{c \times d_k}
+	\end{equation}
+	
+	\textbf{Definitions and Mechanics:}
+	\begin{itemize}
+		\item $M \in \mathbb{R}^{c \times c}$: The mask matrix. It mathematically dictates which tokens are allowed to attend to which other tokens in the context window.
+		\item \textbf{Causal Masking (Autoregressive):} During language generation, a token at position $t$ must only look at past tokens and itself, not future tokens. Otherwise, the model would simply "cheat" by looking at the subsequent words during training. The causal mask is a lower-triangular matrix:
+		\begin{equation}
+			M_{i,j} = 
+			\begin{cases} 
+				0 & \text{if } i \ge j \\
+				-\infty & \text{if } i < j
+			\end{cases}
+		\end{equation}
+		Here, $i$ is the Query token's position (row) and $j$ is the Key token's position (column).
+		\item \textbf{Padding Masking:} To process multiple sequences of varying lengths in a single training batch, shorter sequences are padded with empty $\langle \text{PAD} \rangle$ tokens to match the maximum length $c$. We must force the model to ignore these dummy tokens. If position $j$ corresponds to a padding token, then $M_{i,j} = -\infty$ for all rows $i$.
+		\item \textbf{Why Negative Infinity ($-\infty$)?} The Softmax function exponentiates its inputs ($e^x$). By adding $-\infty$ to the raw similarity score of a forbidden connection, we evaluate $e^{-\infty} \to 0$. This ensures that the forbidden token receives exactly $0$ probability weight, meaning none of its Value ($V$) vector is transferred to the output state.
 	\end{itemize}
 	
 	---
 	
 	\section{Sub-Quadratic Alternatives (Linear Time $O(c)$)}
-	To avoid the $O(c^2)$ bottleneck of $Q_i K_i^T$, modern architectures compress the sequence history into a fixed-size mathematical state[cite: 31].
+	To avoid the $O(c^2)$ bottleneck of $Q_i K_i^T$, modern architectures compress the sequence history into a fixed-size mathematical state.
 	
 	\subsection{Integration into the Mathematical Flow}
-	In these architectures, the $O(c^2)$ Multi-Head Attention block is completely removed[cite: 32].
-	However, the rest of the network's structure remains identical. The sub-quadratic module simply replaces $\text{MHA}(Z)$, accepting the identical input $Z \in \mathbb{R}^{c \times d}$ and returning an output of the exact same dimensions $\mathbb{R}^{c \times d}$[cite: 33].
-	To process $Z$ in linear time, these modules read the matrix $Z$ row-by-row sequentially[cite: 34].
-	Let $x_t \in \mathbb{R}^{1 \times d}$ represent the specific row (token vector) of $Z$ at sequence position $t$ (where $t$ goes from $1$ to $c$)[cite: 35].
+	In these architectures, the $O(c^2)$ Multi-Head Attention block is completely removed.
+	However, the rest of the network's structure remains identical. The sub-quadratic module simply replaces $\text{MHA}(Z)$, accepting the identical input $Z \in \mathbb{R}^{c \times d}$ and returning an output of the exact same dimensions $\mathbb{R}^{c \times d}$.
+	To process $Z$ in linear time, these modules read the matrix $Z$ row-by-row sequentially.
+	Let $x_t \in \mathbb{R}^{1 \times d}$ represent the specific row (token vector) of $Z$ at sequence position $t$ (where $t$ goes from $1$ to $c$).
 	
 	\subsection{State Space Models (SSMs) like Mamba}
-	\textbf{Concept:} SSMs track a compressed hidden state $h_t$ over time[cite: 36].
+	\textbf{Concept:} SSMs track a compressed hidden state $h_t$ over time.
 	Instead of looking back at all previous tokens, the model updates this singular state vector with each new token.
 	For the token vector $x_t$ at step $t$:
 	\begin{equation}
@@ -171,8 +197,8 @@
 	\textbf{Definitions and Mechanics:}
 	\begin{itemize}
 		\item $h_t \in \mathbb{R}^n$: The hidden state vector.
-		$n$ is the State Expansion Dimension, which determines the capacity of the memory[cite: 37].
-		\item $\bar{A} \in \mathbb{R}^{n \times n}$: The state transition matrix[cite: 38].
+		$n$ is the State Expansion Dimension, which determines the capacity of the memory.
+		\item $\bar{A} \in \mathbb{R}^{n \times n}$: The state transition matrix.
 		It controls how the previous hidden state $h_{t-1}$ decays over time.
 		\item $\bar{B}_t \in \mathbb{R}^{d \times n}$: The input projection matrix.
 		Because it is parameterized by $x_t$, the model learns \textit{what} information from the current token is worth memorizing.
@@ -182,7 +208,7 @@
 		A large $\Delta_t$ forces the model to focus heavily on the new input $x_t$ and update the state.
 		A small $\Delta_t$ allows the model to ignore $x_t$ and preserve the historical context within $h_{t-1}$. 
 		\textit{Crucially, $\Delta_t$ determines the continuous-to-discrete transformation}: the continuous baseline matrices $A$ and $B$ are integrated into discrete matrices $\bar{A}$ and $\bar{B}_t$ using rules like $\bar{A} = \exp(\Delta_t A)$ and $\bar{B}_t \approx \Delta_t B_t$. This scales the "force" of the current token update.
-		\item \textbf{Softplus($x$):} A smooth, strictly positive activation function defined mathematically as $\log(1 + e^x)$[cite: 39].
+		\item \textbf{Softplus($x$):} A smooth, strictly positive activation function defined mathematically as $\log(1 + e^x)$.
 		It ensures the discretization step $\Delta_t$ is always positive, preventing numerical instability during integration.
 	\end{itemize}
 	
@@ -190,7 +216,7 @@
 	Because the SSM operates token-by-token, the discrete outputs $y_t \in \mathbb{R}^{1 \times d}$ produced at each step $t$ are collected and stacked vertically. This forms the full sequence output matrix $Y = [y_1, y_2, \dots, y_c]^T \in \mathbb{R}^{c \times d}$. This matrix $Y$ explicitly replaces the $\text{MHA}(Z)$ term in the network pipeline. It will be passed forward into the residual and Layer Normalization functions (detailed in Section 5.4) to construct $Z'$, which ultimately serves as the input to the Feed-Forward Network.
 	
 	\subsection{Gated Linear Attention (DeltaNet)}
-	\textbf{Concept:} Computes $Q (K^T V)$ instead of $(Q K^T) V$ to avoid $c \times c$ scaling, using a running memory $S_t$[cite: 40].
+	\textbf{Concept:} Computes $Q (K^T V)$ instead of $(Q K^T) V$ to avoid $c \times c$ scaling, using a running memory $S_t$.
 	By changing the order of matrix multiplication (associative property), the model maintains a fixed-size memory rather than a growing context window.
 	For token $x_t$:
 	\begin{equation}
@@ -199,13 +225,13 @@
 	
 	\textbf{Definitions and Mechanics:}
 	\begin{itemize}
-		\item $S_t \in \mathbb{R}^{d_k \times d_v}$: The fixed-size memory matrix[cite: 41].
+		\item $S_t \in \mathbb{R}^{d_k \times d_v}$: The fixed-size memory matrix.
 		This stores the summarized context of all tokens up to step $t$.
 		\item $k_t \in \mathbb{R}^{d_k}$ and $v_t \in \mathbb{R}^{d_v}$: The current token's Key and Value vectors.
 		\item $k_t v_t^T$: The outer product of the Key and Value.
 		This produces a $d_k \times d_v$ matrix representing the new information to be added to the memory state.
-		\item $\sigma(x)$: The Sigmoid function, defined as $\sigma(x) = \frac{1}{1 + e^{-x}}$[cite: 42].
-		It squeezes inputs into a range between $(0, 1)$ to act as a fractional "forget gate" $g_t$, allowing the memory to decay over time[cite: 43].
+		\item $\sigma(x)$: The Sigmoid function, defined as $\sigma(x) = \frac{1}{1 + e^{-x}}$.
+		It squeezes inputs into a range between $(0, 1)$ to act as a fractional "forget gate" $g_t$, allowing the memory to decay over time.
 		If $g_t$ is close to 0, old memory is wiped.
 		If $g_t$ is close to 1, old memory is fully retained.
 		\item $q_t \in \mathbb{R}^{d_k}$: The current token's Query vector.
@@ -216,19 +242,39 @@
 	\textbf{Routing to the FFN:}
 	Just like the SSM, the token-level outputs $o_t$ are evaluated for all $c$ steps and concatenated sequentially to form a full context matrix $O \in \mathbb{R}^{c \times d_v}$. Because the attention heads might have changed the vector width to $d_v$, this matrix is multiplied by a final output projection matrix $W^O \in \mathbb{R}^{d_v \times d}$ to project it back to the expected hidden dimension $d$. This final $c \times d$ matrix is what stands in place of $\text{MHA}(Z)$, continuing forward into Equation 14 to compute the intermediate state $Z'$ for the Feed-Forward Network.
 	
+	\subsection{Multi-Head Latent Attention (MLA)}
+	\textbf{Concept:} While not strictly linear time in computation, Multi-Head Latent Attention (popularized by DeepSeek) is heavily utilized to circumvent the memory bottleneck of the Key-Value (KV) cache during inference for long sequences. Instead of storing massive $K$ and $V$ matrices for every token across all heads, MLA compresses the token's historical context into a singular, low-dimensional latent vector.
+	
+	For a token vector $x_t \in \mathbb{R}^{1 \times d}$, a shared latent vector is created:
+	\begin{equation}
+		c_t^{KV} = x_t W^{DKV} \in \mathbb{R}^{1 \times d_c}
+	\end{equation}
+	The content Keys and Values for all $h$ heads are then reconstructed via up-projection:
+	\begin{equation}
+		k_t^C = c_t^{KV} W^{UK}, \quad v_t^C = c_t^{KV} W^{UV}
+	\end{equation}
+	
+	\textbf{Definitions and Mechanics:}
+	\begin{itemize}
+		\item $c_t^{KV} \in \mathbb{R}^{1 \times d_c}$: The compressed latent KV vector. $d_c$ is the latent capacity dimension (where $d_c \ll d$). During generation, the model only needs to cache this tiny vector instead of the full Keys and Values, drastically reducing VRAM usage.
+		\item $W^{DKV} \in \mathbb{R}^{d \times d_c}$: The down-projection weight matrix.
+		\item $W^{UK} \in \mathbb{R}^{d_c \times (h \cdot d_k)}, W^{UV} \in \mathbb{R}^{d_c \times (h \cdot d_v)}$: The up-projection matrices that map the latent vector back into the high-dimensional space for all $h$ heads simultaneously.
+		\item \textbf{Decoupled RoPE:} Because standard Rotary Positional Embeddings (RoPE) are applied conditionally based on sequence position, they cannot be easily compressed into a static latent vector. MLA explicitly separates positional information by calculating a lightweight positional key $k_t^R = \text{RoPE}(x_t W^{KR})$, which is then concatenated to the recovered content key $k_t^C$ during the final attention calculation.
+	\end{itemize}
+	
 	---
 	
 	\section{Network Stability Operations}
 	
 	\subsection{Residual Connections}
-	\textbf{Concept:} Adds the input of a layer directly to its output to prevent gradients from vanishing in deep networks[cite: 44].
+	\textbf{Concept:} Adds the input of a layer directly to its output to prevent gradients from vanishing in deep networks.
 	Think of it as a highway bypass. If a complex sublayer transformation is failing or unnecessary early in training, the original signal can simply bypass it uncorrupted.
 	\begin{equation}
 		\text{Output} = x + \text{Sublayer}(x)
 	\end{equation}
 	\textbf{Definitions:}
 	\begin{itemize}
-		\item $\text{Sublayer}(x)$: A generic placeholder representing whichever transformation is currently being applied to $x$ (e.g., MHA, SSM, or FFN)[cite: 45].
+		\item $\text{Sublayer}(x)$: A generic placeholder representing whichever transformation is currently being applied to $x$ (e.g., MHA, SSM, or FFN).
 	\end{itemize}
 	
 	\subsection{Dropout Regularization}
@@ -236,24 +282,24 @@
 		\text{Dropout}(x) = x \odot \mathbf{m}
 	\end{equation}
 	\textbf{Definitions and Mechanics:} 
-	$\mathbf{m} \sim \text{Bernoulli}(1-p)$ is a random mask vector containing $1$s and $0$s[cite: 46].
-	$p$ is the probability of a neuron being set to $0$ (dropped)[cite: 47].
+	$\mathbf{m} \sim \text{Bernoulli}(1-p)$ is a random mask vector containing $1$s and $0$s.
+	$p$ is the probability of a neuron being set to $0$ (dropped).
 	By randomly deactivating features during training, the network is forced to learn redundant, robust representations rather than relying too heavily on any single neuron (preventing "co-adaptation" or overfitting).
 	
 	\subsection{Layer Normalization (LayerNorm / RMSNorm)}
-	Forces activations to have stable variance so that numbers do not grow infinitely large across many layers[cite: 48].
+	Forces activations to have stable variance so that numbers do not grow infinitely large across many layers.
 	By keeping numerical ranges predictable, the loss landscape remains smooth and gradients do not explode.
 	\begin{equation}
 		\text{LayerNorm}(x) = \gamma \left( \frac{x - \mu}{\sqrt{\sigma_{var}^2 + \epsilon}} \right) + \beta, \quad \text{RMSNorm}(x) = \gamma \frac{x}{\sqrt{\frac{1}{d} \sum x_i^2 + \epsilon}}
 	\end{equation}
 	\textbf{Definitions:} 
 	\begin{itemize}
-		\item $\mu$ is the arithmetic mean (shifts the data to center around zero)[cite: 49].
-		\item $\sigma_{var}^2$ is the variance (scales the data to have a spread of 1)[cite: 50].
+		\item $\mu$ is the arithmetic mean (shifts the data to center around zero).
+		\item $\sigma_{var}^2$ is the variance (scales the data to have a spread of 1).
 		\item $\gamma, \beta \in \mathbb{R}^d$ are trainable scale and shift parameters.
 		Once normalized, the network might actually \textit{want} the data to be shifted or scaled for optimal performance;
 		$\gamma$ and $\beta$ allow the network to explicitly relearn a safe shift and scale.
-		\item $\epsilon$ is a tiny constant ($10^{-5}$) to prevent division by zero[cite: 51].
+		\item $\epsilon$ is a tiny constant ($10^{-5}$) to prevent division by zero.
 	\end{itemize}
 	
 	\subsection{The Intermediate State ($Z'$)}
@@ -265,21 +311,21 @@
 	---
 	
 	\section{Feed-Forward Network (FFN)}
-	\textbf{Concept:} While Attention and SSMs route information \textit{between} different tokens in the sequence, the Feed-Forward Network processes the information \textit{within} each individual token[cite: 52].
-	It operates on each row of $Z'$ independently and identically[cite: 53].
-	Its purpose is to project the token's representation into a higher-dimensional space where complex, non-linear features can be extracted, and then project it back down[cite: 54].
+	\textbf{Concept:} While Attention and SSMs route information \textit{between} different tokens in the sequence, the Feed-Forward Network processes the information \textit{within} each individual token.
+	It operates on each row of $Z'$ independently and identically.
+	Its purpose is to project the token's representation into a higher-dimensional space where complex, non-linear features can be extracted, and then project it back down.
 	\begin{equation}
 		\text{FFN}(Z') = \text{ReLU}(Z' W_1 + b_1) W_2 + b_2 \in \mathbb{R}^{c \times d}
 	\end{equation}
 	\textbf{Definitions:}
 	\begin{itemize}
-		\item $W_1 \in \mathbb{R}^{d \times d_{ff}}$: The expansion weight matrix[cite: 55].
+		\item $W_1 \in \mathbb{R}^{d \times d_{ff}}$: The expansion weight matrix.
 		It projects the vector from dimension $d$ up to $d_{ff}$.
-		\item $W_2 \in \mathbb{R}^{d_{ff} \times d}$: The contraction weight matrix[cite: 56].
-		It projects the vector back down to the standard embedding dimension $d$[cite: 57].
+		\item $W_2 \in \mathbb{R}^{d_{ff} \times d}$: The contraction weight matrix.
+		It projects the vector back down to the standard embedding dimension $d$.
 		\item $b_1 \in \mathbb{R}^{d_{ff}}, b_2 \in \mathbb{R}^d$: Trainable biases.
-		\item $\text{ReLU}(x)$: Rectified Linear Unit, an activation function defined as $\max(0, x)$[cite: 58].
-		It converts all negative numbers to zero, injecting the necessary non-linearity into the network[cite: 59].
+		\item $\text{ReLU}(x)$: Rectified Linear Unit, an activation function defined as $\max(0, x)$.
+		It converts all negative numbers to zero, injecting the necessary non-linearity into the network.
 		Without non-linearities, stacking multiple linear layers would collapse mathematically into just a single linear layer.
 	\end{itemize}
 	
@@ -287,7 +333,7 @@
 	\begin{equation}
 		Z_{out} = \text{LayerNorm}(Z' + \text{Dropout}(\text{FFN}(Z'))) \in \mathbb{R}^{c \times d}
 	\end{equation}
-	This $Z_{out}$ then becomes the input $Z$ for the next layer[cite: 60].
+	This $Z_{out}$ then becomes the input $Z$ for the next layer.
 	This repeats $k$ times.
 	
 	---
@@ -328,31 +374,31 @@
 	\section{Optimization (Updating the Weights)}
 	
 	\subsection{The Trainable Parameters ($\theta$)}
-	Let $\theta$ represent the entire set of trainable parameters in the model[cite: 63].
+	Let $\theta$ represent the entire set of trainable parameters in the model.
 	This includes:
 	\begin{itemize}
 		\item $W_e, W_u$: Embeddings.
-		\item $W_i^Q, W_i^K, W_i^V, W^O$: Attention projections (or their SSM equivalents)[cite: 64].
+		\item $W_i^Q, W_i^K, W_i^V, W^O$: Attention projections (or their SSM equivalents).
 		\item $W_1, W_2, b_1, b_2$: FFN weights and biases.
-		\item $\gamma, \beta$: Normalization scale and shift parameters[cite: 65].
+		\item $\gamma, \beta$: Normalization scale and shift parameters.
 	\end{itemize}
 	
 	\subsection{Backpropagation (The Chain Rule)}
-	To update any weight matrix $W \in \theta$, we calculate its gradient[cite: 66].
+	To update any weight matrix $W \in \theta$, we calculate its gradient.
 	For a standard linear layer where $Y = X \cdot W$:
 	\begin{equation}
 		\nabla_W \mathcal{L} = X^T \cdot \frac{\partial \mathcal{L}}{\partial Y}
 	\end{equation}
 	\textbf{Definitions:} 
 	\begin{itemize}
-		\item $\nabla_W \mathcal{L}$ is the gradient of the loss with respect to $W$[cite: 67].
+		\item $\nabla_W \mathcal{L}$ is the gradient of the loss with respect to $W$.
 		It points in the direction of steepest ascent (where the error increases the most).
-		\item $\frac{\partial \mathcal{L}}{\partial Y}$ is the error signal passed backward from the layers ahead[cite: 68].
+		\item $\frac{\partial \mathcal{L}}{\partial Y}$ is the error signal passed backward from the layers ahead.
 		Using the chain rule of calculus, the network works backward from the final loss, figuring out exactly how much each parameter contributed to the mistake.
 	\end{itemize}
 	
 	\subsection{Adam Optimizer}
-	Adam adjusts the parameters $\theta$ by tracking moving averages of the gradients[cite: 69].
+	Adam adjusts the parameters $\theta$ by tracking moving averages of the gradients.
 	\begin{equation}
 		m_t = \beta_1 m_{t-1} + (1 - \beta_1) \nabla_\theta \mathcal{L}, \quad v_t = \beta_2 v_{t-1} + (1 - \beta_2) (\nabla_\theta \mathcal{L})^2
 	\end{equation}
@@ -364,31 +410,86 @@
 	\end{equation}
 	\textbf{Definitions and Physical Intuition:}
 	\begin{itemize}
-		\item $\eta$: The Learning Rate (the step size taken in the direction of the gradient)[cite: 70].
+		\item $\eta$: The Learning Rate (the step size taken in the direction of the gradient).
 		\item $m_t$: First moment (momentum). Tracks the general direction the gradient is pointing.
 		Like a ball rolling down a hill, it builds up speed if it keeps moving in the same direction, helping it power through small bumps (local minima).
-		\item $v_t$: Second moment (velocity/variance)[cite: 71]. Tracks how violently the gradient is oscillating[cite: 72].
+		\item $v_t$: Second moment (velocity/variance). Tracks how violently the gradient is oscillating.
 		If the gradient jumps wildly back and forth across a ravine, $v_t$ gets large.
 		Dividing by $\sqrt{v_t}$ artificially applies "friction," slowing the optimizer down to prevent it from ping-ponging out of control.
-		\item $\hat{m}_t, \hat{v}_t$: Bias-corrected versions of $m_t$ and $v_t$ to prevent initial updates from skewing toward zero[cite: 73].
-		\item $\beta_1, \beta_2$: Exponential decay rates for the moment estimates[cite: 74].
+		\item $\hat{m}_t, \hat{v}_t$: Bias-corrected versions of $m_t$ and $v_t$ to prevent initial updates from skewing toward zero.
+		\item $\beta_1, \beta_2$: Exponential decay rates for the moment estimates.
 		Typically $0.9$ and $0.999$, controlling how quickly old gradients are forgotten.
 		\item $\epsilon$: A tiny constant to prevent division by zero in the denominator.
 	\end{itemize}
 	
 	\subsection{Muon Optimizer \& Newton-Schulz Iteration}
-	An alternative optimizer specifically designed for internal weight matrices ($W$)[cite: 75].
+	An alternative optimizer specifically designed for internal weight matrices ($W$).
 	\begin{equation}
 		W_{t+1} = W_t - \eta \cdot \text{NewtonSchulz}(\nabla_W \mathcal{L})
 	\end{equation}
 	\textbf{Definitions and Mechanics:} 
-	$\text{NewtonSchulz}(M)$ mathematically transforms an input matrix $M$ into an orthogonal matrix $Q$ (where $Q^T Q = I$, the identity matrix)[cite: 76].
+	$\text{NewtonSchulz}(M)$ mathematically transforms an input matrix $M$ into an orthogonal matrix $Q$ (where $Q^T Q = I$, the identity matrix).
 	It is approximated iteratively via:
 	\begin{equation}
 		M_{k+1} = \frac{1}{2} M_k (3I - M_k^T M_k)
 	\end{equation}
 	This orthogonalization forces the gradient updates to be mathematically independent across rows and columns.
-	In practice, this prevents the network from learning redundant, overlapping features across different attention heads, making training highly efficient[cite: 77].
+	In practice, this prevents the network from learning redundant, overlapping features across different attention heads, making training highly efficient.
+	
+	---
+	
+	\section{Inference Workflows and Memory Constraints}
+	
+	\subsection{The Autoregressive Mathematical Workflow}
+	\textbf{Concept:} During training, the entire sequence of $c$ tokens is processed simultaneously in parallel. However, during inference (text generation), the model operates \textit{autoregressively}, generating one discrete token at a time. The newly generated token is then fed back into the model as the input for the next step.
+	
+	For a given generation step $t$, the workflow mathematically mirrors the training process but operates on a sequence length of exactly $1$ ($x_t \in \mathbb{R}^{1 \times d}$). The process from input to decoded token is as follows:
+	
+	\textbf{1. Input Embedding:} The discrete token generated from the previous step, $tok_t$, is embedded and positionally encoded to form the input vector:
+	\begin{equation}
+		x_t = \text{OneHot}(tok_t) \cdot W_e + P_{(t)} \in \mathbb{R}^{1 \times d}
+	\end{equation}
+	
+	\textbf{2. Attention Calculation \& KV-Caching:} To process $x_t$ through the attention block without recalculating the entire sequence history, models utilize a \textbf{KV-Cache}. The new token's Keys and Values ($k_t = x_t W_i^K, v_t = x_t W_i^V$) are appended to the cached matrices of all preceding tokens:
+	\begin{equation}
+		K_{1:t} = [K_{1:t-1} \Vert k_t], \quad V_{1:t} = [V_{1:t-1} \Vert v_t]
+	\end{equation}
+	The new token's Query ($q_t = x_t W_i^Q$) then attends to this cached history to calculate the attention output:
+	\begin{equation}
+		\text{head}_i = \text{Softmax}\left(\frac{q_t K_{1:t}^T}{\sqrt{d_k}}\right) V_{1:t} \in \mathbb{R}^{1 \times d_k}
+	\end{equation}
+	The concatenated heads are projected and added to the residual stream to form the intermediate state $x'_t \in \mathbb{R}^{1 \times d}$.
+	
+	\textbf{3. Feed-Forward Network (FFN):} The intermediate state $x'_t$ is processed identically to the training phase (though Dropout is typically disabled during inference):
+	\begin{equation}
+		x_{out,t} = \text{LayerNorm}(x'_t + \text{FFN}(x'_t)) \in \mathbb{R}^{1 \times d}
+	\end{equation}
+	
+	\textbf{4. Final Decoding:} The final block's output is projected back into the vocabulary space to produce logits, which are converted to probabilities:
+	\begin{equation}
+		L_t = x_{out,t} W_u \in \mathbb{R}^{1 \times N}, \quad P_t = \text{Softmax}(L_t) \in \mathbb{R}^{1 \times N}
+	\end{equation}
+	A decoding strategy (e.g., greedy $\text{argmax}$ or nucleus sampling) selects the highest probability next token, $tok_{t+1}$, from $P_t$, and the cycle repeats.
+	
+	\subsection{The KV-Cache Memory Bottleneck}
+	\textbf{Concept:} As outlined in the attention calculation above, while KV-caching saves immense computation (FLOPs) by avoiding redundant calculations, it demands massive and ever-growing memory.
+	
+	\textbf{The Bottleneck:} 
+	\begin{itemize}
+		\item $q_t \in \mathbb{R}^{1 \times d_k}$: The Query vector for just the single newly generated token.
+		\item $K_{1:t}, V_{1:t} \in \mathbb{R}^{t \times d_k}$: The cached Keys and Values up to the current step.
+		\item The physical size of the cache grows linearly ($O(t)$) with the sequence length $t$. For a context window of 100,000 tokens with large batch sizes, the KV-cache easily exceeds the VRAM of multiple top-tier GPUs, completely bottlenecking standard Transformers.
+	\end{itemize}
+	
+	\subsection{Constant Memory in Sub-Quadratic Models}
+	\textbf{Concept:} Alternatives like State Space Models (SSMs) and Gated Linear Attention bypass the KV-cache bottleneck entirely. Because they process sequence information sequentially into a fixed-size mathematical state, they achieve an $O(1)$ memory footprint with respect to sequence length during inference.
+	
+	\textbf{Mechanics:}
+	\begin{itemize}
+		\item \textbf{SSMs (e.g., Mamba):} During generation, the model only needs to store the previous hidden state vector $h_{t-1} \in \mathbb{R}^n$. When generating step $t$, it computes $h_t = \bar{A} h_{t-1} + \bar{B}_t x_t$. The historical context is permanently compressed into this $n$-dimensional vector, requiring no growing memory cache.
+		\item \textbf{Gated Linear Attention:} Similarly, the model only caches the fixed-size $d_k \times d_v$ running memory matrix $S_{t-1}$. The new token simply updates this matrix: $S_t = g_t \odot S_{t-1} + k_t v_t^T$.
+		\item \textbf{Result:} This constant memory footprint allows sub-quadratic models to generate theoretically infinite sequences on a single GPU without crashing due to Out-Of-Memory (OOM) errors, making them highly attractive for long-context applications.
+	\end{itemize}
 	
 	---
 	
@@ -401,18 +502,18 @@
 			Embedding Dimension      & $d$             & 512, 1024, 4096 (Larger = more expressive power)          \\
 			Number of Heads          & $h$             & 8, 32, 128 (More heads = finer granular routing)              \\
 			Head Dimension    
-			& $d_k$           & 64 or 128 [cite: 78]                \\
+			& $d_k$           & 64 or 128                 \\
 			Context Size             & $c$             & 4096, 128k, 1M+ (Standard MHA struggles past 8k context)           \\
 			Number of Blocks         & 
-			$k$             & 12, 24, 96 [cite: 79]               \\
+			$k$             & 12, 24, 96                \\
 			FFN Hidden Dimension     & $d_{ff}$        & $4 \times d$ (Standard expansion ratio)              \\
 			SSM State Dimension      & $n$             & 16, 64, 128      
 			\\
-			Dropout Rate             & $p$             & 0.0 to 0.1 (10\%) [cite: 80]        \\
+			Dropout Rate             & $p$             & 0.0 to 0.1 (10\%)         \\
 			Adam Learning Rate       & $\eta$          & $1 \times 10^{-4}$ to $6 \times 10^{-4}$ \\
 			Adam $\beta_1, \beta_2$  & -               & 
 			0.9, 0.95 or 0.999        \\
-			Vocabulary Size          & $N$             & 32,000 to 128,000 [cite: 81]        \\ \bottomrule
+			Vocabulary Size          & $N$             & 32,000 to 128,000         \\ \bottomrule
 		\end{tabular}
 	\end{center}
 	
