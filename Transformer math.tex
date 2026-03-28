@@ -18,23 +18,23 @@
 	\section{Mathematical Preliminaries and Notation}
 	To ensure no prior knowledge is assumed, the following foundational operators and sets are defined:
 	\begin{itemize}
-		\item $\mathbb{R}^{a \times b}$: A matrix of real numbers with $a$ rows and $b$ columns[cite: 1].
+		\item $\mathbb{R}^{a \times b}$: A matrix of real numbers with $a$ rows and $b$ columns.
 		This represents a 2D grid of continuous values.
-		\item $\odot$: Element-wise multiplication (Hadamard product)[cite: 3].
-		If $C = A \odot B$, then $C_{i,j} = A_{i,j} \times B_{i,j}$[cite: 4].
+		\item $\odot$: Element-wise multiplication (Hadamard product).
+		If $C = A \odot B$, then $C_{i,j} = A_{i,j} \times B_{i,j}$.
 		Unlike standard matrix multiplication, this scales corresponding values directly against each other.
-		x\item $\text{Linear}(x)$: A standard linear transformation defined as $\text{Linear}(x) = xW + b$, where $W$ is a learnable weight matrix and $b$ is a learnable bias vector[cite: 7].
+		\item $\text{Linear}(x)$: A standard linear transformation defined as $\text{Linear}(x) = xW + b$, where $W$ is a learnable weight matrix and $b$ is a learnable bias vector.
 		This is the basic building block of neural transformations, projecting data from one dimensional space to another.
 	\end{itemize}
 	
 	---
 	
 	\section{The Input and Embedding Layer}
-	Neural networks require continuous numerical representations to process discrete text[cite: 8].
+	Neural networks require continuous numerical representations to process discrete text.
 	You cannot multiply the word "apple" by a weight matrix; it must become an array of numbers.
 	
 	\subsection{The Embedding Matrix}
-	The embedding weight matrix $W_e$ is a learnable dictionary mapping discrete words to continuous vectors[cite: 9].
+	The embedding weight matrix $W_e$ is a learnable dictionary mapping discrete words to continuous vectors.
 	Think of it as a massive lookup table where every row corresponds to a specific word's "meaning" in space.
 	\begin{equation}
 		W_e \in \mathbb{R}^{N \times d}
@@ -61,7 +61,7 @@
 	\end{itemize}
 	
 	\subsection{Positional Encoding (For Attention Models)}
-	\textbf{Concept:} Because standard Transformers process all $c$ tokens in parallel, we must inject sequence information so the model knows the order of words.
+	\textbf{Concept:} Because standard Transformers process all $c$ tokens in parallel, we must inject sequence information so the model knows the order of words~\cite{vaswani2017attention}.
 	Without this, "The dog bit the man" and "The man bit the dog" would look mathematically identical.
 	We add a Positional Encoding matrix $P$ to the embeddings:
 	\begin{equation}
@@ -85,7 +85,7 @@
 	---
 	
 	\section{Standard Multi-Head Attention (MHA)}
-	This block constitutes the core routing mechanism of the Transformer, allowing tokens to share information across the context window $c$.
+	This block constitutes the core routing mechanism of the Transformer~\cite{vaswani2017attention}, allowing tokens to share information across the context window $c$.
 	
 	\subsection{Defining the Input Sequence ($Z$)}
 	Let $Z \in \mathbb{R}^{c \times d}$ represent the continuous vector sequence entering the current block.
@@ -180,7 +180,7 @@
 	Let $x_t \in \mathbb{R}^{1 \times d}$ represent the specific row (token vector) of $Z$ at sequence position $t$ (where $t$ goes from $1$ to $c$).
 	
 	\subsection{State Space Models (SSMs) like Mamba}
-	\textbf{Concept:} SSMs track a compressed hidden state $h_t$ over time.
+	\textbf{Concept:} SSMs track a compressed hidden state $h_t$ over time~\cite{gu2023mamba}.
 	Instead of looking back at all previous tokens, the model updates this singular state vector with each new token.
 	For the token vector $x_t$ at step $t$:
 	\begin{equation}
@@ -216,7 +216,7 @@
 	Because the SSM operates token-by-token, the discrete outputs $y_t \in \mathbb{R}^{1 \times d}$ produced at each step $t$ are collected and stacked vertically. This forms the full sequence output matrix $Y = [y_1, y_2, \dots, y_c]^T \in \mathbb{R}^{c \times d}$. This matrix $Y$ explicitly replaces the $\text{MHA}(Z)$ term in the network pipeline. It will be passed forward into the residual and Layer Normalization functions (detailed in Section 5.4) to construct $Z'$, which ultimately serves as the input to the Feed-Forward Network.
 	
 	\subsection{Gated Linear Attention (DeltaNet)}
-	\textbf{Concept:} Computes $Q (K^T V)$ instead of $(Q K^T) V$ to avoid $c \times c$ scaling, using a running memory $S_t$.
+	\textbf{Concept:} Computes $Q (K^T V)$ instead of $(Q K^T) V$ to avoid $c \times c$ scaling, using a running memory $S_t$~\cite{yang2024gated}.
 	By changing the order of matrix multiplication (associative property), the model maintains a fixed-size memory rather than a growing context window.
 	For token $x_t$:
 	\begin{equation}
@@ -243,7 +243,7 @@
 	Just like the SSM, the token-level outputs $o_t$ are evaluated for all $c$ steps and concatenated sequentially to form a full context matrix $O \in \mathbb{R}^{c \times d_v}$. Because the attention heads might have changed the vector width to $d_v$, this matrix is multiplied by a final output projection matrix $W^O \in \mathbb{R}^{d_v \times d}$ to project it back to the expected hidden dimension $d$. This final $c \times d$ matrix is what stands in place of $\text{MHA}(Z)$, continuing forward into Equation 14 to compute the intermediate state $Z'$ for the Feed-Forward Network.
 	
 	\subsection{Multi-Head Latent Attention (MLA)}
-	\textbf{Concept:} While not strictly linear time in computation, Multi-Head Latent Attention (popularized by DeepSeek) is heavily utilized to circumvent the memory bottleneck of the Key-Value (KV) cache during inference for long sequences. Instead of storing massive $K$ and $V$ matrices for every token across all heads, MLA compresses the token's historical context into a singular, low-dimensional latent vector.
+	\textbf{Concept:} While not strictly linear time in computation, Multi-Head Latent Attention (popularized by DeepSeek)~\cite{deepseek2024v2} is heavily utilized to circumvent the memory bottleneck of the Key-Value (KV) cache during inference for long sequences. Instead of storing massive $K$ and $V$ matrices for every token across all heads, MLA compresses the token's historical context into a singular, low-dimensional latent vector.
 	
 	For a token vector $x_t \in \mathbb{R}^{1 \times d}$, a shared latent vector is created:
 	\begin{equation}
@@ -267,7 +267,7 @@
 	\section{Network Stability Operations}
 	
 	\subsection{Residual Connections}
-	\textbf{Concept:} Adds the input of a layer directly to its output to prevent gradients from vanishing in deep networks.
+	\textbf{Concept:} Adds the input of a layer directly to its output to prevent gradients from vanishing in deep networks~\cite{he2015resnet}.
 	Think of it as a highway bypass. If a complex sublayer transformation is failing or unnecessary early in training, the original signal can simply bypass it uncorrupted.
 	\begin{equation}
 		\text{Output} = x + \text{Sublayer}(x)
@@ -281,13 +281,13 @@
 	\begin{equation}
 		\text{Dropout}(x) = x \odot \mathbf{m}
 	\end{equation}
-	\textbf{Definitions and Mechanics:} 
+	\textbf{Definitions and Mechanics:}~\cite{srivastava2014dropout} 
 	$\mathbf{m} \sim \text{Bernoulli}(1-p)$ is a random mask vector containing $1$s and $0$s.
 	$p$ is the probability of a neuron being set to $0$ (dropped).
 	By randomly deactivating features during training, the network is forced to learn redundant, robust representations rather than relying too heavily on any single neuron (preventing "co-adaptation" or overfitting).
 	
 	\subsection{Layer Normalization (LayerNorm / RMSNorm)}
-	Forces activations to have stable variance so that numbers do not grow infinitely large across many layers.
+	Forces activations to have stable variance so that numbers do not grow infinitely large across many layers~\cite{ba2016layernorm, zhang2019rmsnorm}.
 	By keeping numerical ranges predictable, the loss landscape remains smooth and gradients do not explode.
 	\begin{equation}
 		\text{LayerNorm}(x) = \gamma \left( \frac{x - \mu}{\sqrt{\sigma_{var}^2 + \epsilon}} \right) + \beta, \quad \text{RMSNorm}(x) = \gamma \frac{x}{\sqrt{\frac{1}{d} \sum x_i^2 + \epsilon}}
@@ -324,7 +324,7 @@
 		\item $W_2 \in \mathbb{R}^{d_{ff} \times d}$: The contraction weight matrix.
 		It projects the vector back down to the standard embedding dimension $d$.
 		\item $b_1 \in \mathbb{R}^{d_{ff}}, b_2 \in \mathbb{R}^d$: Trainable biases.
-		\item $\text{ReLU}(x)$: Rectified Linear Unit, an activation function defined as $\max(0, x)$.
+		\item $\text{ReLU}(x)$: Rectified Linear Unit~\cite{nair2010relu}, an activation function defined as $\max(0, x)$.
 		It converts all negative numbers to zero, injecting the necessary non-linearity into the network.
 		Without non-linearities, stacking multiple linear layers would collapse mathematically into just a single linear layer.
 	\end{itemize}
@@ -398,7 +398,7 @@
 	\end{itemize}
 	
 	\subsection{Adam Optimizer}
-	Adam adjusts the parameters $\theta$ by tracking moving averages of the gradients.
+	Adam~\cite{kingma2014adam} adjusts the parameters $\theta$ by tracking moving averages of the gradients.
 	\begin{equation}
 		m_t = \beta_1 m_{t-1} + (1 - \beta_1) \nabla_\theta \mathcal{L}, \quad v_t = \beta_2 v_{t-1} + (1 - \beta_2) (\nabla_\theta \mathcal{L})^2
 	\end{equation}
@@ -423,7 +423,7 @@
 	\end{itemize}
 	
 	\subsection{Muon Optimizer \& Newton-Schulz Iteration}
-	An alternative optimizer specifically designed for internal weight matrices ($W$).
+	An alternative optimizer specifically designed for internal weight matrices ($W$)~\cite{jordan2024muon}.
 	\begin{equation}
 		W_{t+1} = W_t - \eta \cdot \text{NewtonSchulz}(\nabla_W \mathcal{L})
 	\end{equation}
@@ -516,5 +516,67 @@
 			Vocabulary Size          & $N$             & 32,000 to 128,000         \\ \bottomrule
 		\end{tabular}
 	\end{center}
+	
+	---
+	
+	\bibliographystyle{plain}
+	\begin{thebibliography}{99}
+		
+		\bibitem{vaswani2017attention}
+		Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., Kaiser, \L{}. and Polosukhin, I. (2017).
+		Attention is all you need.
+		\textit{Advances in neural information processing systems}, 30.
+		
+		\bibitem{gu2023mamba}
+		Gu, A. and Dao, T. (2023).
+		Mamba: Linear-time sequence modeling with selective state spaces.
+		\textit{arXiv preprint arXiv:2312.00752}.
+		
+		\bibitem{yang2024gated}
+		Yang, S., Kautz, J. and Hatamizadeh, A. (2024).
+		Gated Delta Networks: Improving Mamba2 with Delta Rule.
+		\textit{arXiv preprint arXiv:2412.06464}.
+		
+		\bibitem{deepseek2024v2}
+		DeepSeek-AI (2024).
+		DeepSeek-V2: A strong, economical, and efficient mixture-of-experts language model.
+		\textit{arXiv preprint arXiv:2405.04434}.
+		
+		\bibitem{he2015resnet}
+		He, K., Zhang, X., Ren, S. and Sun, J. (2016).
+		Deep residual learning for image recognition.
+		\textit{Proceedings of the IEEE conference on computer vision and pattern recognition} (pp. 770-778).
+		
+		\bibitem{srivastava2014dropout}
+		Srivastava, N., Hinton, G., Krizhevsky, A., Sutskever, I. and Salakhutdinov, R. (2014).
+		Dropout: a simple way to prevent neural networks from overfitting.
+		\textit{The journal of machine learning research}, 15(1), pp.1929-1958.
+		
+		\bibitem{ba2016layernorm}
+		Ba, J.L., Kiros, J.R. and Hinton, G.E. (2016).
+		Layer normalization.
+		\textit{arXiv preprint arXiv:1607.06450}.
+		
+		\bibitem{zhang2019rmsnorm}
+		Zhang, B. and Sennrich, R. (2019).
+		Root mean square layer normalization.
+		\textit{Advances in Neural Information Processing Systems}, 32.
+		
+		\bibitem{nair2010relu}
+		Nair, V. and Hinton, G.E. (2010).
+		Rectified linear units improve restricted boltzmann machines.
+		\textit{Proceedings of the 27th international conference on machine learning (ICML-10)} (pp. 807-814).
+		
+		\bibitem{kingma2014adam}
+		Kingma, D.P. and Ba, J. (2014).
+		Adam: A method for stochastic optimization.
+		\textit{arXiv preprint arXiv:1412.6980}.
+		
+		\bibitem{jordan2024muon}
+		Jordan, K., Bernstein, J., Newhouse, L., Boza, V., Jin, Y. et al. (2024).
+		Muon: An optimizer for hidden layers in neural networks.
+		\textit{Published online}.
+		
+	\end{thebibliography}
 	
 \end{document}
