@@ -30,7 +30,7 @@
 	---
 	
 	\section{The Input and Embedding Layer}
-	Neural networks require continuous numerical representations to process discrete text.
+	Neural networks require continuous numerical representations to process discrete text~\cite{mikolov2013efficient}.
 	You cannot multiply the word "apple" by a weight matrix; it must become an array of numbers.
 	
 	\subsection{The Embedding Matrix}
@@ -175,7 +175,7 @@
 	
 	\subsection{Integration into the Mathematical Flow}
 	In these architectures, the $O(c^2)$ Multi-Head Attention block is completely removed.
-	However, the rest of the network's structure remains identical. The sub-quadratic module simply replaces $\text{MHA}(Z)$, accepting the identical input $Z \in \mathbb{R}^{c \times d}$ and returning an output of the exact same dimensions $\mathbb{R}^{c \times d}$.
+	However, the rest of the network's structure remains identical. The sub-quadratic module simply replaces $\text{MHA}(Z)$, accepting the identical input $Z \in \mathbb{R}^{c \times d}$ and returning an output of the exact same dimensions $\mathbb{R}^{c \times d}$. The concept of formulating attention as an efficient recurrent operation was initially pioneered by linear attention frameworks~\cite{katharopoulos2020transformers}.
 	To process $Z$ in linear time, these modules read the matrix $Z$ row-by-row sequentially.
 	Let $x_t \in \mathbb{R}^{1 \times d}$ represent the specific row (token vector) of $Z$ at sequence position $t$ (where $t$ goes from $1$ to $c$).
 	
@@ -259,7 +259,7 @@
 		\item $c_t^{KV} \in \mathbb{R}^{1 \times d_c}$: The compressed latent KV vector. $d_c$ is the latent capacity dimension (where $d_c \ll d$). During generation, the model only needs to cache this tiny vector instead of the full Keys and Values, drastically reducing VRAM usage.
 		\item $W^{DKV} \in \mathbb{R}^{d \times d_c}$: The down-projection weight matrix.
 		\item $W^{UK} \in \mathbb{R}^{d_c \times (h \cdot d_k)}, W^{UV} \in \mathbb{R}^{d_c \times (h \cdot d_v)}$: The up-projection matrices that map the latent vector back into the high-dimensional space for all $h$ heads simultaneously.
-		\item \textbf{Decoupled RoPE:} Because standard Rotary Positional Embeddings (RoPE) are applied conditionally based on sequence position, they cannot be easily compressed into a static latent vector. MLA explicitly separates positional information by calculating a lightweight positional key $k_t^R = \text{RoPE}(x_t W^{KR})$, which is then concatenated to the recovered content key $k_t^C$ during the final attention calculation.
+		\item \textbf{Decoupled RoPE:} Because standard Rotary Positional Embeddings (RoPE)~\cite{su2021roformer} are applied conditionally based on sequence position, they cannot be easily compressed into a static latent vector. MLA explicitly separates positional information by calculating a lightweight positional key $k_t^R = \text{RoPE}(x_t W^{KR})$, which is then concatenated to the recovered content key $k_t^C$ during the final attention calculation.
 	\end{itemize}
 	
 	---
@@ -338,6 +338,58 @@
 	
 	---
 	
+	\section{Mixture of Experts (MoE)}
+	\textbf{Concept:} As models scale, computing the dense Feed-Forward Network (FFN) for every token becomes computationally prohibitive. The Mixture of Experts (MoE) architecture~\cite{shazeer2017outrageously} replaces the single dense FFN within each block with a collection of independent FFNs called "experts." A routing mechanism dynamically selects only a small subset of these experts to process each token, vastly increasing the model's parameter count (capacity) without a proportional increase in active computation (FLOPs) per token.
+	
+	\subsection{The Routing Mechanism}
+	Let $E$ be the total number of experts, where each expert $i$ is a standard Feed-Forward Network ($\text{FFN}_i$).
+	A gating network computes a probability distribution over the experts for a given input token $x \in \mathbb{R}^{1 \times d}$:
+	\begin{equation}
+		G(x) = \text{Softmax}(x W_g) \in \mathbb{R}^{1 \times E}
+	\end{equation}
+	\textbf{Definitions:}
+	\begin{itemize}
+		\item $W_g \in \mathbb{R}^{d \times E}$: The router weight matrix. It projects the $d$-dimensional token vector into an $E$-dimensional space of expert routing scores.
+		\item $G(x)_i$: The routing probability assigned to expert $i$.
+	\end{itemize}
+	The final output of the MoE layer is the probability-weighted sum of the experts' outputs:
+	\begin{equation}
+		\text{MoE}(x) = \sum_{i=1}^{E} G(x)_i \cdot \text{FFN}_i(x) \in \mathbb{R}^{1 \times d}
+	\end{equation}
+	
+	\subsection{Sparse Expert Computation (Top-$K$)}
+	If the equation above were evaluated naively, the model would still compute all $E$ experts. To achieve true computational sparsity~\cite{fedus2022switch}, the router only selects the Top-$K$ highest probability experts (typically $K=1$ or $K=2$).
+	\begin{equation}
+		\text{TopK}(v, K)_i = 
+		\begin{cases} 
+			v_i & \text{if } v_i \text{ is in the top } K \text{ elements of } v \\
+			-\infty & \text{otherwise}
+		\end{cases}
+	\end{equation}
+	The gating probabilities are recalculated using only the retained experts:
+	\begin{equation}
+		G_{sparse}(x) = \text{Softmax}(\text{TopK}(x W_g, K))
+	\end{equation}
+	Because $\text{TopK}$ sets the scores of unselected experts to $-\infty$, the Softmax assigns them exactly $0$ probability. Thus, their respective $\text{FFN}_i(x)$ transformations are never computed, saving massive amounts of compute.
+	
+	\subsection{Load Balancing Auxiliary Loss ($\mathcal{L}_{aux}$)}
+	During training, the routing network often collapses, sending all tokens to a single expert that initializes slightly better than the rest (a self-reinforcing "rich get richer" cycle). To prevent this, MoE models introduce an auxiliary load-balancing loss added to the main cross-entropy loss.
+	For a batch of $T$ tokens, let $f_i$ be the fraction of tokens routed to expert $i$, and $P_i$ be the mean routing probability allocated to expert $i$ across all tokens:
+	\begin{equation}
+		f_i = \frac{1}{T} \sum_{t=1}^{T} \mathbf{1}(\text{token } t \text{ routed to expert } i), \quad P_i = \frac{1}{T} \sum_{t=1}^{T} G(x_t)_i
+	\end{equation}
+	\begin{equation}
+		\mathcal{L}_{aux} = \alpha \cdot E \sum_{i=1}^{E} f_i \cdot P_i
+	\end{equation}
+	\textbf{Mechanics:}
+	\begin{itemize}
+		\item $\mathbf{1}(\dots)$: The indicator function, yielding $1$ if the condition is true and $0$ otherwise.
+		\item $\alpha$: A scaling hyper-parameter (e.g., $0.01$) dictating the strength of the balancing penalty.
+		\item This loss is minimized when the tokens are uniformly distributed ($f_i = 1/E$ and $P_i = 1/E$ for all $i$). If the model heavily favors one expert, $f_i \cdot P_i$ becomes disproportionately large, increasing the penalty.
+	\end{itemize}
+	
+	---
+	
 	\section{Final Output and Loss Function}
 	Once the sequence matrix has passed through all $k$ network blocks, it must be mapped back into a language probability format so the model can make its prediction.
 	
@@ -394,7 +446,7 @@
 		\item $\nabla_W \mathcal{L}$ is the gradient of the loss with respect to $W$.
 		It points in the direction of steepest ascent (where the error increases the most).
 		\item $\frac{\partial \mathcal{L}}{\partial Y}$ is the error signal passed backward from the layers ahead.
-		Using the chain rule of calculus, the network works backward from the final loss, figuring out exactly how much each parameter contributed to the mistake.
+		Using the chain rule of calculus~\cite{rumelhart1986learning}, the network works backward from the final loss, figuring out exactly how much each parameter contributed to the mistake.
 	\end{itemize}
 	
 	\subsection{Adam Optimizer}
@@ -450,7 +502,7 @@
 		x_t = \text{OneHot}(tok_t) \cdot W_e + P_{(t)} \in \mathbb{R}^{1 \times d}
 	\end{equation}
 	
-	\textbf{2. Attention Calculation \& KV-Caching:} To process $x_t$ through the attention block without recalculating the entire sequence history, models utilize a \textbf{KV-Cache}. The new token's Keys and Values ($k_t = x_t W_i^K, v_t = x_t W_i^V$) are appended to the cached matrices of all preceding tokens:
+	\textbf{2. Attention Calculation \& KV-Caching:} To process $x_t$ through the attention block without recalculating the entire sequence history, models utilize a \textbf{KV-Cache}~\cite{shazeer2019fast}. The new token's Keys and Values ($k_t = x_t W_i^K, v_t = x_t W_i^V$) are appended to the cached matrices of all preceding tokens:
 	\begin{equation}
 		K_{1:t} = [K_{1:t-1} \Vert k_t], \quad V_{1:t} = [V_{1:t-1} \Vert v_t]
 	\end{equation}
@@ -576,6 +628,41 @@
 		Jordan, K., Bernstein, J., Newhouse, L., Boza, V., Jin, Y. et al. (2024).
 		Muon: An optimizer for hidden layers in neural networks.
 		\textit{Published online}.
+		
+		\bibitem{mikolov2013efficient}
+		Mikolov, T., Chen, K., Corrado, G. and Dean, J. (2013).
+		Efficient estimation of word representations in vector space.
+		\textit{arXiv preprint arXiv:1301.3781}.
+		
+		\bibitem{su2021roformer}
+		Su, J., Lu, Y., Pan, S., Murtadha, A., Wen, B. and Liu, Y. (2021).
+		RoFormer: Enhanced transformer with rotary position embedding.
+		\textit{arXiv preprint arXiv:2104.09864}.
+		
+		\bibitem{katharopoulos2020transformers}
+		Katharopoulos, A., Vyas, A., Pappas, N. and Fleuret, F. (2020).
+		Transformers are RNNs: Fast autoregressive transformers with linear attention.
+		\textit{International conference on machine learning} (pp. 5156-5165).
+		
+		\bibitem{rumelhart1986learning}
+		Rumelhart, D.E., Hinton, G.E. and Williams, R.J. (1986).
+		Learning representations by back-propagating errors.
+		\textit{nature}, 323(6088), pp.533-536.
+		
+		\bibitem{shazeer2019fast}
+		Shazeer, N. (2019).
+		Fast transformer decoding: One write-head is all you need.
+		\textit{arXiv preprint arXiv:1911.02150}.
+		
+		\bibitem{shazeer2017outrageously}
+		Shazeer, N., Mirhoseini, A., Maziarz, K., Davis, A., Le, Q., Hinton, G. and Dean, J. (2017).
+		Outrageously large neural networks: The sparsely-gated mixture-of-experts layer.
+		\textit{arXiv preprint arXiv:1701.06538}.
+		
+		\bibitem{fedus2022switch}
+		Fedus, W., Zoph, B. and Shazeer, N. (2022).
+		Switch transformers: Scaling to trillion parameter models with simple and efficient sparsity.
+		\textit{The Journal of Machine Learning Research}, 23(1), pp.5232-5270.
 		
 	\end{thebibliography}
 	
