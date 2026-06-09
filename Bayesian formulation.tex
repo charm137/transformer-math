@@ -45,6 +45,8 @@
 		\item $P(w)$ denotes the \textbf{unconditional prior probability} of token $w$ occurring in the language, independent of local context.
 		\item $P(C \mid w)$ represents the \textbf{contextual likelihood}, measuring the alignment of the historical sequence $C$ with the trailing token $w$.
 	\end{enumerate}
+
+	Intuitively, we can think of the model's next-token prediction as an inference problem where the model weighs the default statistical frequency of a word (the prior) against how well that word explains or aligns with the observed prefix sequence (the likelihood). For instance, common words like ``the'' or ``of'' start with a high prior probability, but a highly specific context (e.g., ``The capital of France is'') drastically shifts the likelihood in favor of specific target tokens like ``Paris''. Bayes' theorem provides a clean mathematical decomposition of this tension between global frequency and local context.
 	
 	\section{Mathematical decomposition of likelihood \texorpdfstring{$P(C \mid w)$}{P(C | w)}}
 	
@@ -52,24 +54,37 @@
 	
 	The unnormalized log-probabilities (logits) $z_w$ for each token $w$ are computed by projecting $h_n^{(L)}$ onto an unembedding matrix $U \in \mathbb{R}^{|V| \times d}$, such that $z_w = h_n^{(L)} \cdot u_w$, where $u_w \in \mathbb{R}^d$ is the unembedding vector of the target token~\cite{press2017using}. 
 	
-	The log-likelihood $\log P(C \mid w)$ is shaped by the interaction of two foundational architectural components within each layer $l$: multi-head attention (MHA) and the position-wise feed-forward network (FFN).
+	The log-likelihood $\log P(C \mid w)$ is shaped by the interaction of two foundational architectural components within each layer $l$: multi-head attention (MHA) and the position-wise feed-forward network (FFN). Under this perspective, the Transformer's layers act as a series of belief-updating steps. Instead of computing the likelihood in a single step, the network progressively refines its representation of the context, letting different attention heads and feed-forward sub-layers query, extract, and integrate different aspects of the context. Each component's output is projected back into a shared vector space---the residual stream---where their contributions are combined.
 	
 	\subsection{Multi-head attention as contextual routing}
-	The multi-head attention block at layer $l$ and position $n$ computes a dynamically weighted combination of all preceding token states~\cite{vaswani2017attention}. The number of attention heads is denoted by $H$, and the head dimension by $d_k$. For a single attention head $g \in \{1, \dots, H\}$, the query, key, and value projection matrices are denoted by $W_Q^{(l, g)}, W_K^{(l, g)}, W_V^{(l, g)} \in \mathbb{R}^{d \times d_k}$, respectively. 
-	
-	The terminal query vector for head $g$ is defined as $q_n^{(l, g)} = h_n^{(l-1)}W_Q^{(l, g)}$, whereas the keys and values for all historical positions $i \in \{1, \dots, n\}$ are represented as $k_i^{(l, g)} = h_i^{(l-1)}W_K^{(l, g)}$ and $v_i^{(l, g)} = h_i^{(l-1)}W_V^{(l, g)}$. The dynamic attention weights $\alpha_{n,i}^{(l, g)}$, which formalize conditional token-to-token dependencies, are expressed as:
+	The multi-head attention block at layer $l$ and position $n$ computes a dynamically weighted combination of all preceding token states~\cite{vaswani2017attention}. The number of attention heads is denoted by $H$, and the head dimension by $d_k$. For a single attention head $g \in \{1, \dots, H\}$, the query, key, and value projection matrices are denoted by $W_Q^{(l, g)}, W_K^{(l, g)}, W_V^{(l, g)} \in \mathbb{R}^{d \times d_k}$, respectively. Mathematically, these matrices serve as linear feature extractors that project the general residual representation $h^{(l-1)}$ into specialized spaces:
+	\begin{enumerate}
+		\item The query projection $W_Q^{(l, g)}$ maps the current token state to a query vector $q_n^{(l, g)} = h_n^{(l-1)}W_Q^{(l, g)}$, representing the specific contextual information being requested at the terminal position $n$.
+		\item The key projection $W_K^{(l, g)}$ maps historical token states to key vectors $k_i^{(l, g)} = h_i^{(l-1)}W_K^{(l, g)}$, representing the indexable features or keys offered by each preceding token $i$.
+		\item The value projection $W_V^{(l, g)}$ maps historical token states to value vectors $v_i^{(l, g)} = h_i^{(l-1)}W_V^{(l, g)}$, representing the actual semantic content or updates to be extracted if a match occurs.
+	\end{enumerate}
+
+	The dynamic attention weights $\alpha_{n,i}^{(l, g)}$ represent the relevance or routing strength of each historical position $i$ relative to the current position $n$. These weights are computed by taking the dot product between the query $q_n^{(l, g)}$ and each key $k_i^{(l, g)}$, scaled by $\sqrt{d_k}$ to prevent gradient vanishing, and normalized across all positions via the softmax function:
 	
 	\begin{equation}
 		\alpha_{n,i}^{(l, g)} = \frac{\exp\left(\frac{q_n^{(l, g)} \cdot k_i^{(l, g)}}{\sqrt{d_k}}\right)}{\sum_{j=1}^n \exp\left(\frac{q_n^{(l, g)} \cdot k_j^{(l, g)}}{\sqrt{d_k}}\right)}
 	\end{equation}
 	
-	The concatenated outputs of all heads are projected back into the residual stream via the global output matrix $W_O^{(l)} \in \mathbb{R}^{d \times d}$. By partitioning $W_O^{(l)} = [ (W_{O, 1}^{(l)})^T \dots (W_{O, H}^{(l)})^T ]^T$, where each head's output projection slice is represented as $W_{O, g}^{(l)} \in \mathbb{R}^{d_k \times d}$, the total attention contribution to the log-likelihood of a target token $w$ is decomposed into a sum of bilinear forms:
+	Crucially, the attention weights $\alpha_{n,i}^{(l, g)}$ themselves do not incorporate the value vectors; rather, they serve as a routing distribution that acts on the value vectors. The output of head $g$ is computed as the weighted sum of these value vectors: $a_{n,g}^{(l)} = \sum_{i=1}^n \alpha_{n,i}^{(l, g)} v_i^{(l, g)}$. 
+	
+	The concatenated outputs of all heads are projected back into the residual stream via the global output matrix $W_O^{(l)} \in \mathbb{R}^{d \times d}$. By partitioning $W_O^{(l)} = [ (W_{O, 1}^{(l)})^T \dots (W_{O, H}^{(l)})^T ]^T$, where each head's output projection slice is represented as $W_{O, g}^{(l)} \in \mathbb{R}^{d_k \times d}$, the global attention output is $a_n^{(l)} = \sum_{g=1}^H a_{n,g}^{(l)} W_{O, g}^{(l)}$. Projecting this output onto the target token unembedding vector $u_w$ yields the total attention contribution to the log-likelihood:
+	
+	\begin{equation}
+		\log P(C \mid w)_{\text{MHA}} \sim \sum_{g=1}^H \sum_{i=1}^n \alpha_{n,i}^{(l, g)} \left( v_i^{(l, g)} W_{O, g}^{(l)} u_w \right)
+	\end{equation}
+	
+	By expanding $v_i^{(l, g)} = h_i^{(l-1)} W_V^{(l, g)}$, this contribution is expressed in its standard bilinear form:
 	
 	\begin{equation}
 		\log P(C \mid w)_{\text{MHA}} \sim \sum_{g=1}^H \sum_{i=1}^n \alpha_{n,i}^{(l, g)} \left( h_i^{(l-1)} W_V^{(l, g)} W_{O, g}^{(l)} u_w \right)
 	\end{equation}
 	
-	Two distinct mechanisms are thereby isolated: contextual routing is determined by $\alpha_{n,i}^{(l, g)}$, whereas semantic alignment between the historical features of token $i$ and target token $w$ is mediated by the bilinear inner product.
+	Two distinct mechanisms are thereby isolated: contextual routing is determined by $\alpha_{n,i}^{(l, g)}$, whereas semantic alignment between the historical features of token $i$ and target token $w$ is mediated by the bilinear inner product. Intuitively, the query-key interaction $\alpha_{n,i}^{(l, g)}$ acts as a dynamic routing mechanism that scales with the relevance of historical positions $i$ to the query at position $n$. Upon connection, the model retrieves the contextualized value vector of token $i$, transforms it through the output projection, and aligns it with the candidate target token $w$, rather than simply replicating the token $i$ itself. Thus, the attention head computes how much a specific historical event (token $i$) increases or decreases the likelihood of the next token $w$ based on their semantic compatibility.
 	
 	\subsection{Feed-forward networks as concept memory retrieval}
 	Following the attention block, the updated hidden state $x_n^{(l)} = h_n^{(l-1)} + a_n^{(l)}$ is processed by the position-wise feed-forward network (FFN). The FFN is modeled as a key-value associative memory~\cite{geva-etal-2021-transformer}. The parameters are represented by $W_1^{(l)} \in \mathbb{R}^{d \times d_{ff}}$ (denoting intermediate keys $\{k_m^{(l)}\}_{m=1}^{d_{ff}}$) and $W_2^{(l)} \in \mathbb{R}^{d_{ff} \times d}$ (denoting intermediate values $\{v_m^{(l)}\}_{m=1}^{d_{ff}}$).
@@ -86,7 +101,37 @@
 		\log P(C \mid w)_{\text{FFN}} \sim \sum_{m=1}^{d_{ff}} \sigma\left( x_n^{(l)} \cdot k_m^{(l)} + b_{1,m}^{(l)} \right) \cdot (v_m^{(l)} \cdot u_w)
 	\end{equation}
 	
-	The activation term $\sigma\left( x_n^{(l)} \cdot k_m^{(l)} + b_{1,m}^{(l)} \right)$ scales the degree of satisfaction of the $m$-th latent conceptual rule by the synthesized context, whereas the term $(v_m^{(l)} \cdot u_w)$ represents the semantic correlation between that rule and the vocabulary token $w$.
+	The activation term $\sigma\left( x_n^{(l)} \cdot k_m^{(l)} + b_{1,m}^{(l)} \right)$ scales the degree of satisfaction of the $m$-th latent conceptual rule by the synthesized context, whereas the term $(v_m^{(l)} \cdot u_w)$ represents the semantic correlation between that rule and the vocabulary token $w$. To build intuition, we can view the FFN as a database of textual patterns or ``rules''. The intermediate keys $k_m^{(l)}$ represent key patterns in the language (e.g., ``subject is plural'' or ``context is about computing''). The activation function $\sigma$ determines if the current hidden state matches this pattern. If it does, the corresponding value vector $v_m^{(l)}$ is retrieved and added to the residual stream. This value vector contains semantic updates that promote or demote specific target tokens $w$ through the dot product $(v_m^{(l)} \cdot u_w)$. For instance, if a rule detecting ``context is about computing'' is triggered, its value vector will have large positive dot products with target tokens like ``server'', ``compiler'', or ``database''.
+
+	\section{Additive integration in the residual stream}
+	
+	Before analyzing the individual geometric components of the prior and the final logit mechanics, we must examine how the contributions of the attention and feed-forward blocks accumulate. In the Transformer architecture, the hidden state at the terminal position $n$ is updated via a residual connection after each sub-layer. The final hidden state $h_n^{(L)}$ after $L$ layers can be expanded as the sum of the initial embedding state and the outputs of all attention and feed-forward blocks across all layers:
+	
+	\begin{equation}
+		h_n^{(L)} = h_n^{(0)} + \sum_{l=1}^L \left( a_n^{(l)} + f_n^{(l)} \right)
+	\end{equation}
+	
+	where $h_n^{(0)} \in \mathbb{R}^d$ represents the initial input representation (the sum of token and positional embeddings at position $n$), $a_n^{(l)} \in \mathbb{R}^d$ is the output of the multi-head attention block at layer $l$, and $f_n^{(l)} \in \mathbb{R}^d$ is the output of the feed-forward network at layer $l$. 
+	
+	When the final logit $z_w$ for a candidate token $w$ is computed via the dot product with the unembedding vector $u_w$, this additive structure is preserved:
+	
+	\begin{equation}
+		z_w = h_n^{(L)} \cdot u_w = \left( h_n^{(0)} \cdot u_w \right) + \sum_{l=1}^L \left( a_n^{(l)} \cdot u_w \right) + \sum_{l=1}^L \left( f_n^{(l)} \cdot u_w \right)
+	\end{equation}
+	
+	This summation corresponds directly to the log-space representation of our Bayesian formulation. Recall that the log posterior probability of the target token is given by:
+	
+	\begin{equation}
+		\log P(w \mid C) = \log P(w) + \log P(C \mid w) - \log P(C)
+	\end{equation}
+	
+	By comparing the log-posterior to the logit expansion, we can map the architectural components to their probabilistic counterparts:
+	\begin{enumerate}
+		\item The initial state projection $\left( h_n^{(0)} \cdot u_w \right)$ acts as a baseline, capturing position-independent token transition frequencies, which we associate with the log-prior $\log P(w)$ (and which is further modulated by unembedding biases or norms).
+		\item The attention updates $\left( a_n^{(l)} \cdot u_w \right)$ and FFN updates $\left( f_n^{(l)} \cdot u_w \right)$ at each layer $l$ represent incremental log-likelihood updates $\log P(C \mid w)^{(l)}$ based on contextual routing and concept retrieval.
+	\end{enumerate}
+	
+	Thus, the residual stream serves as an additive log-probability accumulator. Instead of calculating the posterior in a single step, the Transformer functions as a sequential Bayesian updater: each layer queries the context (via MHA) and applies conceptual rules (via FFN) to add independent pieces of log-likelihood evidence to the running log-prior, culminating in the final logit.
 	
 	\section{Geometric formulation of the prior \texorpdfstring{$P(w)$}{P(w)} and logit mechanics}
 	
@@ -96,7 +141,7 @@
 		P(w) = \sum_{C \in \mathcal{C}} P(w \mid C)P(C)
 	\end{equation}
 	
-	This expectation is statically approximated within the parameters of the Transformer via two geometric mechanisms:
+	This expectation is statically approximated within the parameters of the Transformer via two geometric mechanisms. Because calculating the true marginal probability of a word across all possible contexts is computationally intractable, the network stores a static approximation of word frequency directly within its weights. This prior acts as a starting bias: even before reading a sentence, some words (like ``the'') are vastly more likely to occur than others. The network encodes this frequency prior in two distinct geometric ways depending on the architecture:
 	
 	\subsection{Unembedding bias \texorpdfstring{($b_U$)}{(b\_U)}}
 	In architectures featuring an explicit unembedding bias $b_U \in \mathbb{R}^{|V|}$, the logit calculation is defined as $z_w = (h_n^{(L)} \cdot u_w) + b_{U,w}$. Under an uninformative context where $h_n \to \mathbf{0}$, the logit collapses directly to the scalar bias component, yielding:
@@ -105,6 +150,8 @@
 		P(w) \approx \frac{\exp(b_{U,w})}{\sum_{v \in V} \exp(b_{U,v})}
 	\end{equation}
 	
+	The unembedding bias $b_{U,w}$ functions as a direct lookup table of global token frequencies. When the context is empty or completely uninformative, the network output $h_n$ vanishes, and the softmax probabilities default entirely to these bias values. This is equivalent to predicting the next word based purely on its raw frequency in the training corpus.
+	
 	\subsection{Embedding norms \texorpdfstring{($\|u_w\|$)}{(||u\_w||)}}
 	In bias-free architectures, the prior is encoded in the Euclidean magnitude of the token vector, $\|u_w\|$. Geometric decomposition of the final inner product yields:
 	
@@ -112,14 +159,14 @@
 		z_w = \|h_n^{(L)}\| \|u_w\| \cos(\theta_w)
 	\end{equation}
 	
-	where $\theta_w$ is the angle between the final context state and the token vector. Longer vector magnitudes $\|u_w\|$ are developed during optimization by tokens with high baseline frequencies in the training corpus, thereby amplifying the baseline logit irrespective of the contextual direction $\cos(\theta_w)$~\cite{gao2019representation}.
+	where $\theta_w$ is the angle between the final context state and the token vector. Longer vector magnitudes $\|u_w\|$ are developed during optimization by tokens with high baseline frequencies in the training corpus, thereby amplifying the baseline logit irrespective of the contextual direction $\cos(\theta_w)$~\cite{gao2019representation}. In the absence of a bias term, the network exploits the magnitude (Euclidean norm) of the token vectors themselves. Because the dot product $h_n \cdot u_w$ depends on the length of $u_w$, a token with a very long unembedding vector will naturally receive a higher logit, even if the context vector $h_n$ is only weakly aligned with it. During training, the optimization process stretches the vectors of common words and shrinks those of rare words, embedding the prior probability distribution directly into the scale of the vector space.
 	
 	\section{Statistical mechanics of the latent stream}
 	
 	The remaining term in the geometric logit decomposition is the norm of the final hidden state, $\|h_n^{(L)}\|$. This component serves as a dynamic, context-dependent entropy controller.
 	
 	\subsection{Activation variance as inverse temperature}
-	The final hidden state $h_n^{(L)}$ is represented as a row vector $h_n = [x_1, x_2, \dots, x_d] \in \mathbb{R}^d$. If the individual channel activations are treated as samples from an internal distribution with a mean driven to zero by layer normalization ($\mu_x \approx 0$)~\cite{ba2016layernorm}, the cross-channel variance is defined as:
+	The final hidden state $h_n^{(L)}$ is represented as a row vector $h_n = [x_1, x_2, \dots, x_d] \in \mathbb{R}^d$. If the individual vector components $x_i$ are treated as samples from an internal distribution with a mean driven to zero by layer normalization ($\mu_x \approx 0$)~\cite{ba2016layernorm}, the variance across components is defined as:
 	
 	\begin{equation}
 		\sigma^2 = \frac{1}{d} \sum_{i=1}^d (x_i - \mu_x)^2 \approx \frac{1}{d} \sum_{i=1}^d x_i^2
@@ -138,9 +185,11 @@
 	\end{equation}
 	
 	\begin{enumerate}
-		\item \textbf{High contextual certainty:} In predictable contexts, aligned information is written into the residual stream by successive attention heads and FFN layers. The cross-channel variance $\sigma^2$ is inflated via constructive interference, causing $\|h_n\|$ to expand. A high inverse temperature $\beta$ is yielded, thereby sharpening the distribution and lowering entropy.
-		\item \textbf{High contextual ambiguity:} In entropic or transitional contexts, orthogonal or destructive vectors are written into the residual stream by architectural sub-layers. The cross-channel variance $\sigma^2$ is collapsed, shrinking $\|h_n\|$. A low inverse temperature $\beta$ is yielded, flattening the distribution into a high-entropy state.
+		\item \textbf{High contextual certainty:} In predictable contexts, aligned information is written into the residual stream by successive attention heads and FFN layers. The variance across components $\sigma^2$ is inflated via constructive interference, causing $\|h_n\|$ to expand. A high inverse temperature $\beta$ is yielded, thereby sharpening the distribution and lowering entropy.
+		\item \textbf{High contextual ambiguity:} In entropic or transitional contexts, orthogonal or destructive vectors are written into the residual stream by architectural sub-layers. The variance across components $\sigma^2$ is collapsed, shrinking $\|h_n\|$. A low inverse temperature $\beta$ is yielded, flattening the distribution into a high-entropy state.
 	\end{enumerate}
+
+	This behavior can be understood by treating the vector norm $\|h_n\|$ as a measure of contextual certainty. Under highly predictable contexts, the representation updates computed by successive attention and feed-forward sub-layers align along similar directions in the embedding space. This alignment increases the variance across the vector components, thereby expanding the magnitude $\|h_n\|$. In the thermodynamic analogy, a high inverse temperature $\beta$ corresponds to a low-temperature state where the probability mass concentrates tightly on a single dominant token. Conversely, under high contextual ambiguity, updates from different sub-layers project along conflicting or orthogonal directions. The resulting destructive interference collapses the cross-component variance, shrinking the vector norm $\|h_n\|$. The corresponding low inverse temperature $\beta$ yields a high-entropy probability distribution where probability mass is distributed more uniformly across candidate tokens.
 	
 	\subsection{Cosine similarity as a correlation coefficient}
 	Similarly, by treating the dimensions of $h_n$ and $u_w$ as zero-mean random variables, the likelihood component $\cos(\theta_w)$ is mapped directly to the Pearson correlation coefficient ($r_{h_n, u_w}$) in feature space:
@@ -149,7 +198,7 @@
 		\cos(\theta_w) = \frac{\text{Cov}(h_n, u_w)}{\sigma_{h_n} \sigma_{u_w}} = r_{h_n, u_w}
 	\end{equation}
 	
-	where $\sigma_{h_n}$ and $\sigma_{u_w}$ denote the standard deviations of the components of $h_n$ and $u_w$, respectively. The unnormalized logit is therefore proportional to the total feature covariance scaled by the model dimension: $z_w = \text{Cov}(h_n, u_w) \cdot d$.
+	where $\sigma_{h_n}$ and $\sigma_{u_w}$ denote the standard deviations of the components of $h_n$ and $u_w$, respectively. The unnormalized logit is therefore proportional to the total feature covariance scaled by the model dimension: $z_w = \text{Cov}(h_n, u_w) \cdot d$. From an intuitive perspective, each component in the hidden space can be interpreted as representing a specific linguistic feature (e.g., tense, gender, or subject area). Under this interpretation, the context vector $h_n$ and the token vector $u_w$ serve as profiles of these features, and the cosine similarity measures the correlation between their respective configurations. If the context vector exhibits large magnitude values in components corresponding to features such as ``computing'' and ``plural'', and the token ``servers'' shares this pattern, their feature profiles will be highly correlated ($\cos(\theta_w) \approx 1$), yielding a high-likelihood match.
 	
 	\section{Statistical description of pre-training}
 	
@@ -159,7 +208,7 @@
 		\mathcal{L} = -\log \frac{\exp(h_n \cdot u_{w^*})}{\sum_{v \in V} \exp(h_n \cdot u_v)}
 	\end{equation}
 	
-	This optimization framework is modeled as a dual-force geometric process:
+	This optimization framework is modeled as a dual-force geometric process. Pre-training is conceptualized as a physical process of self-organization, where forces of attraction and repulsion shape the geometry of the embedding space. The training loss functions as a potential energy surface, and gradient descent acts as a system of forces that pulls related vectors together while pushing unrelated ones apart:
 	
 	\subsection{The mutual attraction force}
 	The gradient with respect to the correct token vector $u_{w^*}$ is interpreted as an attractive force:
@@ -168,7 +217,7 @@
 		\frac{\partial \mathcal{L}}{\partial u_{w^*}} = -\big(1 - P(w^* \mid C)\big) h_n
 	\end{equation}
 	
-	By this force, $u_{w^*}$ and the context representation $h_n$ are dynamically rotated toward one another, thereby maximizing the directional correlation $\cos(\theta_{w^*})$. Simultaneously, for a token $w^*$ consistently validated across diverse contexts, the vector norm $\|u_{w^*}\|$ is driven upward to minimize corpus-wide loss, thereby establishing the global prior $P(w)$.
+	By this force, $u_{w^*}$ and the context representation $h_n$ are dynamically rotated toward one another, thereby maximizing the directional correlation $\cos(\theta_{w^*})$. Simultaneously, for a token $w^*$ consistently validated across diverse contexts, the vector norm $\|u_{w^*}\|$ is driven upward to minimize corpus-wide loss, thereby establishing the global prior $P(w)$. The attraction force operates analogously to a spring pulling the correct token vector $u_{w^*}$ and the context vector $h_n$ together. The magnitude of this pull is inversely proportional to the model's prediction confidence ($P(w^* \mid C) \to 0$). Over the course of training, this force rotates the context and token vectors toward alignment. Consequently, words that frequently appear as correct next-tokens are repeatedly pulled by diverse contexts, causing their vector norms to grow and establishing their high prior probability.
 	
 	\subsection{The global repulsion force}
 	Conversely, a contrastive repulsion force against all incorrect tokens $v \neq w^*$ is generated by the denominator of the Softmax, resembling contrastive representation learning frameworks~\cite{oord2018representation}:
@@ -177,7 +226,7 @@
 		\frac{\partial \mathcal{L}}{\partial u_v} = P(v \mid C) h_n
 	\end{equation}
 	
-	The context state $h_n$ is thereby pushed away from incorrect vocabulary vectors, forcing them toward orthogonality ($\cos(\theta_v) \to 0$).
+	The context state $h_n$ is thereby pushed away from incorrect vocabulary vectors, forcing them toward orthogonality ($\cos(\theta_v) \to 0$). This repulsive force is scaled by the probability mass mistakenly assigned to each incorrect token, driving incorrect tokens to be orthogonal to the context vector. This projection clears the surrounding vector space to isolate and highlight the correct token representation.
 	
 	\subsection{Emergence of distributional semantics}
 	Through loss minimization over a large corpus, semantic clustering emerges. For distinct tokens $w_1$ and $w_2$ sharing high contextual substitutionality, identical directional updates are repeatedly received from shared context states $h_n$. A geometric steady-state is thereby established by this self-organizing system, wherein a coordinate system is discovered by vocabulary vectors such that spatial proximity mirrors latent semantic relationships, validating the distributional hypothesis~\cite{harris_distributional_1954}:
@@ -186,7 +235,7 @@
 		\cos(\theta_{w_1, w_2}) \to 1 \iff \mathcal{C}_{w_1} \approx \mathcal{C}_{w_2}
 	\end{equation}
 	
-	where $\mathcal{C}_w$ represents the distribution of contexts in which token $w$ appears.
+	where $\mathcal{C}_w$ represents the distribution of contexts in which token $w$ appears. For example, if the tokens ``cat'' and ``dog'' frequently appear in similar context sequences (e.g., ``I fed the \_\_\_''), their respective unembedding vectors are updated along similar trajectories by the shared context vectors $h_n$. Even in the absence of explicit comparison during training, the shared contexts act as common basins of attraction that pull both vectors into spatial proximity. The resulting clustering behavior is an emergent property of the dual forces of attraction and repulsion, rather than a pre-programmed structural constraint.
 	
 	\section{Conclusion}
 	
