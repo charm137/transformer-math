@@ -22,7 +22,7 @@
 	
 	\section{Introduction and the Bayesian framing}
 	
-	An autoregressive large language model operates over a finite vocabulary $V$~\cite{bengio2003neural}. Given a context sequence of $n$ tokens, $C = (t_1, t_2, \dots, t_n)$, where $t_i \in V$, a discrete conditional probability distribution over the vocabulary is defined for the next token $w \in V$:
+	An autoregressive large language model operates over a finite vocabulary $V$, framing sequence prediction as originally formalized by Shannon~\cite{shannon1948mathematical} and implemented via neural networks by Bengio et al.~\cite{bengio2003neural} and Mikolov et al.~\cite{mikolov2010recurrent}. Given a context sequence of $n$ tokens, $C = (t_1, t_2, \dots, t_n)$, where $t_i \in V$, a discrete conditional probability distribution over the vocabulary is defined for the next token $w \in V$:
 	
 	\begin{equation}
 		P(w \mid C)
@@ -78,7 +78,7 @@
 		\log P(C \mid w)_{\text{MHA}} \sim \sum_{g=1}^H \sum_{i=1}^n \alpha_{n,i}^{(l, g)} \left( v_i^{(l, g)} W_{O, g}^{(l)} u_w \right)
 	\end{equation}
 	
-	By expanding $v_i^{(l, g)} = h_i^{(l-1)} W_V^{(l, g)}$, this contribution is expressed in its standard bilinear form:
+	By expanding $v_i^{(l, g)} = h_i^{(l-1)} W_V^{(l, g)}$, this contribution is expressed in its standard bilinear form, building upon bilinear attention scoring techniques originally developed for sequence alignment~\cite{luong2015effective}:
 	
 	\begin{equation}
 		\log P(C \mid w)_{\text{MHA}} \sim \sum_{g=1}^H \sum_{i=1}^n \alpha_{n,i}^{(l, g)} \left( h_i^{(l-1)} W_V^{(l, g)} W_{O, g}^{(l)} u_w \right)
@@ -87,7 +87,7 @@
 	Two distinct mechanisms are thereby isolated: contextual routing is determined by $\alpha_{n,i}^{(l, g)}$, whereas semantic alignment between the historical features of token $i$ and target token $w$ is mediated by the bilinear inner product. Intuitively, the query-key interaction $\alpha_{n,i}^{(l, g)}$ acts as a dynamic routing mechanism that scales with the relevance of historical positions $i$ to the query at position $n$. Upon connection, the model retrieves the contextualized value vector of token $i$, transforms it through the output projection, and aligns it with the candidate target token $w$, rather than simply replicating the token $i$ itself. Thus, the attention head computes how much a specific historical event (token $i$) increases or decreases the likelihood of the next token $w$ based on their semantic compatibility.
 	
 	\subsection{Feed-forward networks as concept memory retrieval}
-	Following the attention block, the updated hidden state $x_n^{(l)} = h_n^{(l-1)} + a_n^{(l)}$ is processed by the position-wise feed-forward network (FFN). The FFN is modeled as a key-value associative memory~\cite{geva-etal-2021-transformer}. The parameters are represented by $W_1^{(l)} \in \mathbb{R}^{d \times d_{ff}}$ (denoting intermediate keys $\{k_m^{(l)}\}_{m=1}^{d_{ff}}$) and $W_2^{(l)} \in \mathbb{R}^{d_{ff} \times d}$ (denoting intermediate values $\{v_m^{(l)}\}_{m=1}^{d_{ff}}$).
+	Following the attention block, the updated hidden state $x_n^{(l)} = h_n^{(l-1)} + a_n^{(l)}$ is processed by the position-wise feed-forward network (FFN). The FFN is modeled as a key-value associative memory~\cite{geva-etal-2021-transformer}, extending the classical key-value and end-to-end memory network paradigms~\cite{sukhbaatar2015end, miller2016key}. The parameters are represented by $W_1^{(l)} \in \mathbb{R}^{d \times d_{ff}}$ (denoting intermediate keys $\{k_m^{(l)}\}_{m=1}^{d_{ff}}$) and $W_2^{(l)} \in \mathbb{R}^{d_{ff} \times d}$ (denoting intermediate values $\{v_m^{(l)}\}_{m=1}^{d_{ff}}$).
 	
 	Upon application of a non-linear activation function $\sigma$ (e.g., GELU~\cite{hendrycks2016gelu}), the operation at the terminal position is formulated as:
 	
@@ -111,27 +111,36 @@
 		h_n^{(L)} = h_n^{(0)} + \sum_{l=1}^L \left( a_n^{(l)} + f_n^{(l)} \right)
 	\end{equation}
 	
-	where $h_n^{(0)} \in \mathbb{R}^d$ represents the initial input representation (the sum of token and positional embeddings at position $n$), $a_n^{(l)} \in \mathbb{R}^d$ is the output of the multi-head attention block at layer $l$, and $f_n^{(l)} \in \mathbb{R}^d$ is the output of the feed-forward network at layer $l$. 
+	where $h_n^{(0)} \in \mathbb{R}^d$ represents the initial input representation (the sum of the token embedding $e_{t_n}$ and positional embedding $p_n$ at position $n$), $a_n^{(l)} \in \mathbb{R}^d$ is the output of the multi-head attention block at layer $l$, and $f_n^{(l)} \in \mathbb{R}^d$ is the output of the feed-forward network at layer $l$. 
 	
 	When the final logit $z_w$ for a candidate token $w$ is computed via the dot product with the unembedding vector $u_w$, this additive structure is preserved:
 	
 	\begin{equation}
-		z_w = h_n^{(L)} \cdot u_w = \left( h_n^{(0)} \cdot u_w \right) + \sum_{l=1}^L \left( a_n^{(l)} \cdot u_w \right) + \sum_{l=1}^L \left( f_n^{(l)} \cdot u_w \right)
+		\boxed{z_w = h_n^{(L)} \cdot u_w = \left( h_n^{(0)} \cdot u_w \right) + \sum_{l=1}^L \left( a_n^{(l)} \cdot u_w \right) + \sum_{l=1}^L \left( f_n^{(l)} \cdot u_w \right)}
 	\end{equation}
 	
-	This summation corresponds directly to the log-space representation of our Bayesian formulation. Recall that the log posterior probability of the target token is given by:
+	To relate this additive expansion to the Bayesian formulation, we map the logits to the posterior log-probabilities via the Softmax normalization. The log posterior probability is given by:
 	
 	\begin{equation}
 		\log P(w \mid C) = \log P(w) + \log P(C \mid w) - \log P(C)
 	\end{equation}
 	
-	By comparing the log-posterior to the logit expansion, we can map the architectural components to their probabilistic counterparts:
+	By equating the log-posterior to the normalized logit $\log P(w \mid C) = z_w - \log Z(C)$, where $Z(C) = \sum_{v \in V} \exp(z_v)$ is the context-dependent partition function, the unnormalized logit corresponds directly to the unnormalized joint log-probability up to a constant offset:
+	
+	\begin{equation}
+		\boxed{z_w = \log P(w) + \log P(C \mid w) + \left( \log Z(C) - \log P(C) \right)}
+	\end{equation}
+	
+	This mapping allows us to identify the statistical counterparts of the residual stream components under a robust generalized additive framework:
 	\begin{enumerate}
-		\item The initial state projection $\left( h_n^{(0)} \cdot u_w \right)$ acts as a baseline, capturing position-independent token transition frequencies, which we associate with the log-prior $\log P(w)$ (and which is further modulated by unembedding biases or norms).
-		\item The attention updates $\left( a_n^{(l)} \cdot u_w \right)$ and FFN updates $\left( f_n^{(l)} \cdot u_w \right)$ at each layer $l$ represent incremental log-likelihood updates $\log P(C \mid w)^{(l)}$ based on contextual routing and concept retrieval.
+		\item The initial state projection $\left( h_n^{(0)} \cdot u_w \right) = \left( e_{t_n} \cdot u_w \right) + \left( p_n \cdot u_w \right)$ serves as a local transition prior (capturing bigram log-odds and positional bias relative to the preceding token $t_n$). This baseline is further modulated by the static, context-independent parameters (unembedding biases and norms) that encode the global unconditional prior $\log P(w)$, as analyzed in Section 4.
+		\item The sub-layer updates $\left( a_n^{(l)} \cdot u_w \right)$ and $\left( f_n^{(l)} \cdot u_w \right)$ act as sequential feature contributions. Rather than assuming that the Transformer layers compute independent likelihood updates---which would violate their hierarchical dependencies---this additive summation is modeled as a Generalized Additive Model (GAM) that sequentially refines the unnormalized log-likelihood:
+		\begin{equation}
+			\log P(C \mid w) + \text{constant}_C \approx \sum_{l=1}^L \left( a_n^{(l)} \cdot u_w + f_n^{(l)} \cdot u_w \right)
+		\end{equation}
 	\end{enumerate}
 	
-	Thus, the residual stream serves as an additive log-probability accumulator. Instead of calculating the posterior in a single step, the Transformer functions as a sequential Bayesian updater: each layer queries the context (via MHA) and applies conceptual rules (via FFN) to add independent pieces of log-likelihood evidence to the running log-prior, culminating in the final logit.
+	Thus, the residual stream serves as an additive log-probability accumulator. Instead of calculating the posterior in a single step, the Transformer functions as a sequential Bayesian estimator: each layer queries the context (via MHA) and applies conceptual rules (via FFN) to add updates to the running log-prior, culminating in the final logit. This additive formalization of the residual stream aligns with its visualization as a shared communication channel through which individual sub-layers write and read semantic features~\cite{elhage2021mathematical}, and underpins the projection of intermediate activations onto the unembedding vocabulary space to analyze layer-wise updates, a technique known as the Logit Lens~\cite{nostalgebraist2020logit}.
 	
 	\section{Geometric formulation of the prior \texorpdfstring{$P(w)$}{P(w)} and logit mechanics}
 	
@@ -178,7 +187,7 @@
 		\|h_n\| = \sqrt{d \cdot \sigma^2}
 	\end{equation}
 	
-	Upon substitution of this relation into the vocabulary-wide Softmax function, $\|h_n\|$ is mapped to the inverse temperature parameter $\beta = \frac{1}{T}$ from statistical mechanics~\cite{jaynes1957, ackley1985learning}:
+	Upon substitution of this relation into the vocabulary-wide Softmax function, $\|h_n\|$ is mapped to the inverse temperature parameter $\beta = \frac{1}{T}$ from statistical mechanics~\cite{jaynes1957, ackley1985learning}, a formulation closely related to post-hoc temperature scaling methods used in neural network calibration~\cite{guo2017calibration}:
 	
 	\begin{equation}
 		P(w \mid C) = \frac{\exp\big(\beta \cdot \|u_w\| \cos(\theta_w)\big)}{\sum_{v \in V} \exp\big(\beta \cdot \|u_v\| \cos(\theta_v)\big)}, \quad \text{where } \beta = \|h_n\|
@@ -198,7 +207,7 @@
 		\cos(\theta_w) = \frac{\text{Cov}(h_n, u_w)}{\sigma_{h_n} \sigma_{u_w}} = r_{h_n, u_w}
 	\end{equation}
 	
-	where $\sigma_{h_n}$ and $\sigma_{u_w}$ denote the standard deviations of the components of $h_n$ and $u_w$, respectively. The unnormalized logit is therefore proportional to the total feature covariance scaled by the model dimension: $z_w = \text{Cov}(h_n, u_w) \cdot d$. From an intuitive perspective, each component in the hidden space can be interpreted as representing a specific linguistic feature (e.g., tense, gender, or subject area). Under this interpretation, the context vector $h_n$ and the token vector $u_w$ serve as profiles of these features, and the cosine similarity measures the correlation between their respective configurations. If the context vector exhibits large magnitude values in components corresponding to features such as ``computing'' and ``plural'', and the token ``servers'' shares this pattern, their feature profiles will be highly correlated ($\cos(\theta_w) \approx 1$), yielding a high-likelihood match.
+	where $\sigma_{h_n}$ and $\sigma_{u_w}$ denote the standard deviations of the components of $h_n$ and $u_w$, respectively. The unnormalized logit is therefore proportional to the total feature covariance scaled by the model dimension: $z_w = \text{Cov}(h_n, u_w) \cdot d$. From an intuitive perspective, each component in the hidden space can be interpreted as representing a specific linguistic feature (e.g., tense, gender, or subject area). Under this interpretation, the context vector $h_n$ and the token vector $u_w$ serve as profiles of these features, and the cosine similarity measures the correlation between their respective configurations, a metric widely used to evaluate semantic similarity in distributed word representation spaces~\cite{mikolov2013distributed}. If the context vector exhibits large magnitude values in components corresponding to features such as ``computing'' and ``plural'', and the token ``servers'' shares this pattern, their feature profiles will be highly correlated ($\cos(\theta_w) \approx 1$), yielding a high-likelihood match.
 	
 	\section{Statistical description of pre-training}
 	
@@ -208,7 +217,7 @@
 		\mathcal{L} = -\log \frac{\exp(h_n \cdot u_{w^*})}{\sum_{v \in V} \exp(h_n \cdot u_v)}
 	\end{equation}
 	
-	This optimization framework is modeled as a dual-force geometric process. Pre-training is conceptualized as a physical process of self-organization, where forces of attraction and repulsion shape the geometry of the embedding space. The training loss functions as a potential energy surface, and gradient descent acts as a system of forces that pulls related vectors together while pushing unrelated ones apart:
+	This optimization framework is modeled as a dual-force geometric process. Pre-training is conceptualized as a physical process of self-organization, where forces of attraction and repulsion shape the geometry of the embedding space, drawing a direct parallel to contrastive representation learning frameworks that rely on attractive and repulsive forces to construct coherent embedding manifolds~\cite{hadsell2006dimensionality}. The training loss functions as a potential energy surface, and gradient descent acts as a system of forces that pulls related vectors together while pushing unrelated ones apart:
 	
 	\subsection{The mutual attraction force}
 	The gradient with respect to the correct token vector $u_{w^*}$ is interpreted as an attractive force:
@@ -220,7 +229,7 @@
 	By this force, $u_{w^*}$ and the context representation $h_n$ are dynamically rotated toward one another, thereby maximizing the directional correlation $\cos(\theta_{w^*})$. Simultaneously, for a token $w^*$ consistently validated across diverse contexts, the vector norm $\|u_{w^*}\|$ is driven upward to minimize corpus-wide loss, thereby establishing the global prior $P(w)$. The attraction force operates analogously to a spring pulling the correct token vector $u_{w^*}$ and the context vector $h_n$ together. The magnitude of this pull is inversely proportional to the model's prediction confidence ($P(w^* \mid C) \to 0$). Over the course of training, this force rotates the context and token vectors toward alignment. Consequently, words that frequently appear as correct next-tokens are repeatedly pulled by diverse contexts, causing their vector norms to grow and establishing their high prior probability.
 	
 	\subsection{The global repulsion force}
-	Conversely, a contrastive repulsion force against all incorrect tokens $v \neq w^*$ is generated by the denominator of the Softmax, resembling contrastive representation learning frameworks~\cite{oord2018representation}:
+	Conversely, a contrastive repulsion force against all incorrect tokens $v \neq w^*$ is generated by the denominator of the Softmax, resembling contrastive representation learning frameworks~\cite{oord2018representation} and noise-contrastive estimation objectives~\cite{gutmann2010noise}:
 	
 	\begin{equation}
 		\frac{\partial \mathcal{L}}{\partial u_v} = P(v \mid C) h_n
@@ -308,6 +317,56 @@
 		Harris, Z.S. (1954).
 		Distributional structure.
 		\textit{Word}, 10(2-3), pp.146--162.
+		
+		\bibitem{luong2015effective}
+		Luong, M.T., Pham, H. and Manning, C.D. (2015).
+		Effective approaches to attention-based neural machine translation.
+		\textit{Proceedings of the 2015 Conference on Empirical Methods in Natural Language Processing}, pp. 1412--1421.
+		
+		\bibitem{miller2016key}
+		Miller, A., Fisch, A., Dodge, J., Karimi, A.H., Bordes, A. and Weston, J. (2016).
+		Key-value memory networks for question answering.
+		\textit{Proceedings of the 2016 Conference on Empirical Methods in Natural Language Processing}, pp. 440--450.
+		
+		\bibitem{elhage2021mathematical}
+		Elhage, N., Nanda, N., Olsson, C., Henighan, T., Joseph, N., Mann, B., Askell, A., Yang, Y., DasSarma, N., Jones, A. and others (2021).
+		A mathematical framework for transformer circuits.
+		\textit{Transformer Circuits Thread}.
+		
+		\bibitem{nostalgebraist2020logit}
+		nostalgebraist (2020).
+		interpreting GPT: the logit lens.
+		\textit{LessWrong}.
+		
+		\bibitem{gutmann2010noise}
+		Gutmann, M. and Hyv{\"a}rinen, A. (2010).
+		Noise-contrastive estimation: A new estimation principle for unnormalized statistical models.
+		\textit{Proceedings of the thirteenth international conference on artificial intelligence and statistics}, pp. 297--304.
+		
+		\bibitem{mikolov2010recurrent}
+		Mikolov, T., Karafi{\'a}t, M., Burget, L., Cernock{\'y}, J. and Khudanpur, S. (2010).
+		Recurrent neural network based language model.
+		\textit{Interspeech}, 2, pp. 1045--1048.
+		
+		\bibitem{sukhbaatar2015end}
+		Sukhbaatar, S., Szlam, A., Weston, J. and Fergus, R. (2015).
+		End-to-end memory networks.
+		\textit{Advances in neural information processing systems}, 28.
+		
+		\bibitem{guo2017calibration}
+		Guo, C., Pleiss, G., Sun, Y. and Weinberger, K.Q. (2017).
+		On calibration of modern neural networks.
+		\textit{International Conference on Machine Learning}, pp. 1321--1330.
+		
+		\bibitem{mikolov2013distributed}
+		Mikolov, T., Sutskever, I., Chen, K., Corrado, G.S. and Dean, J. (2013).
+		Distributed representations of words and phrases and their compositionality.
+		\textit{Advances in neural information processing systems}, 26.
+		
+		\bibitem{hadsell2006dimensionality}
+		Hadsell, R., Chopra, S. and LeCun, Y. (2006).
+		Dimensionality reduction by learning an invariant mapping.
+		\textit{IEEE Computer Society Conference on Computer Vision and Pattern Recognition}, 2, pp. 1735--1742.
 		
 	\end{thebibliography}
 
